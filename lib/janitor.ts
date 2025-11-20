@@ -192,6 +192,18 @@ export class Janitor {
                 reasoning: result.object.reasoning
             })
 
+            // Calculate approximate size saved from newly pruned tool outputs (using expanded IDs)
+            let totalCharsSaved = 0
+            for (const prunedId of finalPrunedIds) {
+                const output = toolOutputs.get(prunedId)
+                if (output) {
+                    totalCharsSaved += output.length
+                }
+            }
+
+            // Rough token estimate (1 token ≈ 4 characters for English text)
+            const estimatedTokensSaved = Math.round(totalCharsSaved / 4)
+
             // Merge newly pruned IDs with existing ones (using expanded IDs)
             const allPrunedIds = [...new Set([...alreadyPrunedIds, ...finalPrunedIds])]
             await this.stateManager.set(sessionID, allPrunedIds)
@@ -288,7 +300,7 @@ export class Janitor {
                     }
 
                     // Format the message with tool details
-                    let message = `Pruned ${finalPrunedIds.length} tool output${finalPrunedIds.length > 1 ? 's' : ''} from context\n`
+                    let message = `Pruned ${finalPrunedIds.length} tool output${finalPrunedIds.length > 1 ? 's' : ''} from context (~${estimatedTokensSaved.toLocaleString()} tokens saved)\n`
                     
                     for (const [toolName, params] of toolsSummary.entries()) {
                         if (params.length > 0) {
@@ -320,6 +332,8 @@ export class Janitor {
                     this.logger.info("janitor", "Toast notification shown", {
                         sessionID,
                         prunedCount: finalPrunedIds.length,
+                        estimatedTokensSaved,
+                        totalCharsSaved,
                         toolsSummary: Array.from(toolsSummary.entries())
                     })
                 } catch (toastError: any) {
