@@ -65,8 +65,13 @@ function minimizeMessages(messages: any[], alreadyPrunedIds?: string[], protecte
                         if (part.state?.input) {
                             const input = part.state.input
 
-                            // For file operations, just keep the file path
-                            if (input.filePath) {
+                            // For write/edit tools, keep file path AND content (what was changed matters)
+                            // These tools: write, edit, multiedit, patch
+                            if (input.filePath && (part.tool === 'write' || part.tool === 'edit' || part.tool === 'multiedit' || part.tool === 'patch')) {
+                                toolPart.input = input // Keep full input (content, oldString, newString, etc.)
+                            }
+                            // For read-only file operations, just keep the file path
+                            else if (input.filePath) {
                                 toolPart.input = { filePath: input.filePath }
                             }
                             // For batch operations, summarize instead of full array

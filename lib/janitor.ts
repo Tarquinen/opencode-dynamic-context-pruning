@@ -16,7 +16,8 @@ export class Janitor {
         private modelCache: Map<string, { providerID: string; modelID: string }>,
         private configModel?: string, // Format: "provider/model"
         private showModelErrorToasts: boolean = true, // Whether to show toast for model errors
-        private pruningMode: "auto" | "smart" = "smart" // Pruning strategy
+        private pruningMode: "auto" | "smart" = "smart", // Pruning strategy
+        private pruningSummary: "off" | "minimal" | "detailed" = "detailed" // UI summary display mode
     ) { }
 
     /**
@@ -584,6 +585,26 @@ export class Janitor {
     }
 
     /**
+     * Send minimal summary notification (just tokens saved and count)
+     */
+    private async sendMinimalNotification(
+        sessionID: string,
+        totalPruned: number,
+        toolOutputs: Map<string, string>,
+        prunedIds: string[]
+    ) {
+        if (totalPruned === 0) return
+
+        const tokensSaved = await this.calculateTokensSaved(prunedIds, toolOutputs)
+        const tokensFormatted = formatTokenCount(tokensSaved)
+        const toolText = totalPruned === 1 ? 'tool' : 'tools'
+
+        const message = `🧹 DCP: Saved ~${tokensFormatted} tokens (${totalPruned} ${toolText} pruned)`
+
+        await this.sendIgnoredMessage(sessionID, message)
+    }
+
+    /**
      * Auto mode notification - shows only deduplication results
      */
     private async sendAutoModeNotification(
@@ -594,6 +615,16 @@ export class Janitor {
     ) {
         if (deduplicatedIds.length === 0) return
 
+        // Check if notifications are disabled
+        if (this.pruningSummary === 'off') return
+
+        // Send minimal notification if configured
+        if (this.pruningSummary === 'minimal') {
+            await this.sendMinimalNotification(sessionID, deduplicatedIds.length, toolOutputs, deduplicatedIds)
+            return
+        }
+
+        // Otherwise send detailed notification
         // Calculate token savings
         const tokensSaved = await this.calculateTokensSaved(deduplicatedIds, toolOutputs)
         const tokensFormatted = formatTokenCount(tokensSaved)
@@ -647,6 +678,17 @@ export class Janitor {
         const totalPruned = deduplicatedIds.length + llmPrunedIds.length
         if (totalPruned === 0) return
 
+        // Check if notifications are disabled
+        if (this.pruningSummary === 'off') return
+
+        // Send minimal notification if configured
+        if (this.pruningSummary === 'minimal') {
+            const allPrunedIds = [...deduplicatedIds, ...llmPrunedIds]
+            await this.sendMinimalNotification(sessionID, totalPruned, toolOutputs, allPrunedIds)
+            return
+        }
+
+        // Otherwise send detailed notification
         // Calculate token savings
         const allPrunedIds = [...deduplicatedIds, ...llmPrunedIds]
         const tokensSaved = await this.calculateTokensSaved(allPrunedIds, toolOutputs)

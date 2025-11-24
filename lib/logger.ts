@@ -89,9 +89,9 @@ export class Logger {
                 ? idsMatch[1].split(',').map(id => id.trim())
                 : []
 
-            // Extract session history (between "Session history:\n" and "\n\nYou MUST respond")
+            // Extract session history (between "Session history" and "\n\nYou MUST respond")
             // The captured text has literal newlines, so we need to escape them back to \n for valid JSON
-            const historyMatch = prompt.match(/Session history:\s*\n([\s\S]*?)\n\nYou MUST respond/)
+            const historyMatch = prompt.match(/Session history[^\n]*:\s*\n([\s\S]*?)\n\nYou MUST respond/)
             let sessionHistory: any[] = []
             
             if (historyMatch) {
@@ -113,7 +113,8 @@ export class Logger {
 
             // Extract response schema (after "You MUST respond with valid JSON matching this exact schema:")
             // Note: The schema contains "..." placeholders which aren't valid JSON, so we save it as a string
-            const schemaMatch = prompt.match(/matching this exact schema:\s*\n(\{[\s\S]*?\})\s*\n\nReturn ONLY/)
+            // Now matches until end of prompt since we removed the "Return ONLY..." line
+            const schemaMatch = prompt.match(/matching this exact schema:\s*\n(\{[\s\S]*?\})\s*$/)
             const responseSchema = schemaMatch 
                 ? schemaMatch[1] // Keep as string since it has "..." placeholders
                 : null

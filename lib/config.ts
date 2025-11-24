@@ -13,6 +13,7 @@ export interface PluginConfig {
     model?: string // Format: "provider/model" (e.g., "anthropic/claude-haiku-4-5")
     showModelErrorToasts?: boolean // Show toast notifications when model selection fails
     pruningMode: "auto" | "smart" // Pruning strategy: auto (deduplication only) or smart (deduplication + LLM analysis)
+    pruning_summary: "off" | "minimal" | "detailed" // UI summary display mode
 }
 
 const defaultConfig: PluginConfig = {
@@ -20,7 +21,8 @@ const defaultConfig: PluginConfig = {
     debug: false, // Disable debug logging by default
     protectedTools: ['task', 'todowrite', 'todoread'], // Tools that should never be pruned (including stateful tools)
     showModelErrorToasts: true, // Show model error toasts by default
-    pruningMode: 'smart' // Default to smart mode (deduplication + LLM analysis)
+    pruningMode: 'smart', // Default to smart mode (deduplication + LLM analysis)
+    pruning_summary: 'detailed' // Default to detailed summary
 }
 
 const GLOBAL_CONFIG_DIR = join(homedir(), '.config', 'opencode')
@@ -109,6 +111,12 @@ function createDefaultConfig(): void {
   // "smart": Deduplication + AI analysis for intelligent pruning (recommended)
   "pruningMode": "smart",
 
+  // Pruning summary display mode:
+  // "off": No UI summary (silent pruning)
+  // "minimal": Show tokens saved and count (e.g., "Saved ~2.5K tokens (6 tools pruned)")
+  // "detailed": Show full breakdown by tool type and pruning method (default)
+  "pruning_summary": "detailed",
+
   // List of tools that should never be pruned from context
   // "task": Each subagent invocation is intentional
   // "todowrite"/"todoread": Stateful tools where each call matters
@@ -161,7 +169,8 @@ export function getConfig(ctx?: PluginInput): PluginConfig {
                 protectedTools: globalConfig.protectedTools ?? config.protectedTools,
                 model: globalConfig.model ?? config.model,
                 showModelErrorToasts: globalConfig.showModelErrorToasts ?? config.showModelErrorToasts,
-                pruningMode: globalConfig.pruningMode ?? config.pruningMode
+                pruningMode: globalConfig.pruningMode ?? config.pruningMode,
+                pruning_summary: globalConfig.pruning_summary ?? config.pruning_summary
             }
             logger.info('config', 'Loaded global config', { path: configPaths.global })
         }
@@ -181,7 +190,8 @@ export function getConfig(ctx?: PluginInput): PluginConfig {
                 protectedTools: projectConfig.protectedTools ?? config.protectedTools,
                 model: projectConfig.model ?? config.model,
                 showModelErrorToasts: projectConfig.showModelErrorToasts ?? config.showModelErrorToasts,
-                pruningMode: projectConfig.pruningMode ?? config.pruningMode
+                pruningMode: projectConfig.pruningMode ?? config.pruningMode,
+                pruning_summary: projectConfig.pruning_summary ?? config.pruning_summary
             }
             logger.info('config', 'Loaded project config (overrides global)', { path: configPaths.project })
         }
