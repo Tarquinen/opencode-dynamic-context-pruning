@@ -23,6 +23,37 @@ export class Logger {
         }
     }
 
+    /**
+     * Formats data object into a compact, readable string
+     * e.g., {saved: "~4.1K", pruned: 4, duplicates: 0} -> "saved=~4.1K pruned=4 duplicates=0"
+     */
+    private formatData(data?: any): string {
+        if (!data) return ""
+        
+        const parts: string[] = []
+        for (const [key, value] of Object.entries(data)) {
+            if (value === undefined || value === null) continue
+            
+            // Format arrays compactly
+            if (Array.isArray(value)) {
+                if (value.length === 0) continue
+                parts.push(`${key}=[${value.slice(0, 3).join(",")}${value.length > 3 ? `...+${value.length - 3}` : ""}]`)
+            }
+            // Format objects inline if small, skip if large
+            else if (typeof value === 'object') {
+                const str = JSON.stringify(value)
+                if (str.length < 50) {
+                    parts.push(`${key}=${str}`)
+                }
+            }
+            // Format primitives directly
+            else {
+                parts.push(`${key}=${value}`)
+            }
+        }
+        return parts.join(" ")
+    }
+
     private async write(level: string, component: string, message: string, data?: any) {
         if (!this.enabled) return
 
@@ -30,13 +61,10 @@ export class Logger {
             await this.ensureLogDir()
 
             const timestamp = new Date().toISOString()
-            const logEntry = {
-                timestamp,
-                level,
-                component,
-                message,
-                ...(data && { data })
-            }
+            const dataStr = this.formatData(data)
+            
+            // Simple, readable format: TIMESTAMP LEVEL component: message | key=value key=value
+            const logLine = `${timestamp} ${level.padEnd(5)} ${component}: ${message}${dataStr ? " | " + dataStr : ""}\n`
 
             const dailyLogDir = join(this.logDir, "daily")
             if (!existsSync(dailyLogDir)) {
@@ -44,8 +72,6 @@ export class Logger {
             }
 
             const logFile = join(dailyLogDir, `${new Date().toISOString().split('T')[0]}.log`)
-            const logLine = JSON.stringify(logEntry) + "\n"
-
             await writeFile(logFile, logLine, { flag: "a" })
         } catch (error) {
             // Silently fail - don't break the plugin if logging fails
@@ -140,7 +166,6 @@ export class Logger {
         // We detect being "inside a string" by tracking quotes
         let result = ''
         let inString = false
-        let escaped = false
         
         for (let i = 0; i < jsonText.length; i++) {
             const char = jsonText[i]
@@ -237,15 +262,6 @@ export class Logger {
             const jsonString = JSON.stringify(content, null, 2)
             
             await writeFile(filepath, jsonString)
-            
-            // Log that we saved it
-            await this.debug("logger", "Saved AI context", {
-                sessionID,
-                filepath,
-                messageCount: messages.length,
-                isJanitorShadow,
-                parsed: isJanitorShadow
-            })
         } catch (error) {
             // Silently fail - don't break the plugin if logging fails
         }

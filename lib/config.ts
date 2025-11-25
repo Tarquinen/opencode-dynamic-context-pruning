@@ -135,8 +135,6 @@ function loadConfigFile(configPath: string): Partial<PluginConfig> | null {
         const fileContent = readFileSync(configPath, 'utf-8')
         return parse(fileContent) as Partial<PluginConfig>
     } catch (error: any) {
-        const logger = new Logger(true)
-        logger.error('config', `Failed to read config from ${configPath}: ${error.message}`)
         return null
     }
 }

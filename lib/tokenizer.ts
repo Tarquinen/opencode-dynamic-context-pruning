@@ -10,41 +10,19 @@
  * is actually needed.
  */
 
-import type { Logger } from './logger'
-
 /**
  * Batch estimates tokens for multiple text samples
  * 
  * @param texts - Array of text strings to tokenize
- * @param logger - Optional logger instance
  * @returns Array of token counts
  */
-export async function estimateTokensBatch(
-    texts: string[],
-    logger?: Logger
-): Promise<number[]> {
+export async function estimateTokensBatch(texts: string[]): Promise<number[]> {
     try {
         // Lazy import - only load the 53MB gpt-tokenizer package when actually needed
         const { encode } = await import('gpt-tokenizer')
-        
-        const results = texts.map(text => {
-            const tokens = encode(text)
-            return tokens.length
-        })
-
-        logger?.debug('tokenizer', 'Batch token estimation complete', {
-            batchSize: texts.length,
-            totalTokens: results.reduce((sum, count) => sum + count, 0),
-            avgTokensPerText: Math.round(results.reduce((sum, count) => sum + count, 0) / results.length)
-        })
-
-        return results
-    } catch (error: any) {
-        logger?.warn('tokenizer', 'Batch tokenization failed, using fallback', {
-            error: error.message
-        })
-
-        // Fallback to character-based estimation
+        return texts.map(text => encode(text).length)
+    } catch {
+        // Fallback to character-based estimation if tokenizer fails
         return texts.map(text => Math.round(text.length / 4))
     }
 }

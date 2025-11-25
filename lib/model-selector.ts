@@ -120,8 +120,6 @@ export async function selectModel(
     configModel?: string,
     workspaceDir?: string
 ): Promise<ModelSelectionResult> {
-    logger?.info('model-selector', 'Model selection started', { currentModel, configModel, workspaceDir });
-    
     // Lazy import with retry logic - handles plugin initialization timing issues
     // Some providers (like openai via @openhax/codex) may not be ready on first attempt
     // Pass workspaceDir so OpencodeAI can find project-level config and plugins
@@ -133,22 +131,12 @@ export async function selectModel(
     if (configModel) {
         const parts = configModel.split('/');
         if (parts.length !== 2) {
-            logger?.warn('model-selector', '✗ Invalid config model format, expected "provider/model"', {
-                configModel
-            });
+            logger?.warn('model-selector', 'Invalid config model format', { configModel });
         } else {
             const [providerID, modelID] = parts;
-            logger?.debug('model-selector', 'Attempting to use config-specified model', {
-                providerID,
-                modelID
-            });
 
             try {
                 const model = await opencodeAI.getLanguageModel(providerID, modelID);
-                logger?.info('model-selector', '✓ Successfully using config-specified model', {
-                    providerID,
-                    modelID
-                });
                 return {
                     model,
                     modelInfo: { providerID, modelID },
@@ -156,9 +144,7 @@ export async function selectModel(
                     reason: 'Using model specified in dcp.jsonc config'
                 };
             } catch (error: any) {
-                logger?.warn('model-selector', '✗ Failed to use config-specified model, falling back', {
-                    providerID,
-                    modelID,
+                logger?.warn('model-selector', `Config model failed: ${providerID}/${modelID}`, {
                     error: error.message
                 });
                 failedModelInfo = { providerID, modelID };
@@ -169,27 +155,13 @@ export async function selectModel(
     // Step 2: Try user's current model (if not skipped provider)
     if (currentModel) {
         if (shouldSkipProvider(currentModel.providerID)) {
-            logger?.info('model-selector', 'Skipping user model (provider not suitable for background tasks)', {
-                providerID: currentModel.providerID,
-                modelID: currentModel.modelID,
-                reason: 'github-copilot and anthropic are skipped for analysis'
-            });
             // Track as failed so we can show toast
             if (!failedModelInfo) {
                 failedModelInfo = currentModel;
             }
         } else {
-            logger?.debug('model-selector', 'Attempting to use user\'s current model', {
-                providerID: currentModel.providerID,
-                modelID: currentModel.modelID
-            });
-
             try {
                 const model = await opencodeAI.getLanguageModel(currentModel.providerID, currentModel.modelID);
-                logger?.info('model-selector', '✓ Successfully using user\'s current model', {
-                    providerID: currentModel.providerID,
-                    modelID: currentModel.modelID
-                });
                 return {
                     model,
                     modelInfo: currentModel,
@@ -197,11 +169,6 @@ export async function selectModel(
                     reason: 'Using current session model'
                 };
             } catch (error: any) {
-                logger?.warn('model-selector', '✗ Failed to use user\'s current model', {
-                    providerID: currentModel.providerID,
-                    modelID: currentModel.modelID,
-                    error: error.message
-                });
                 if (!failedModelInfo) {
                     failedModelInfo = currentModel;
                 }
@@ -210,43 +177,16 @@ export async function selectModel(
     }
 
     // Step 3: Try fallback models from authenticated providers
-    logger?.debug('model-selector', 'Fetching available authenticated providers');
     const providers = await opencodeAI.listProviders();
-    const availableProviderIDs = Object.keys(providers);
-    logger?.info('model-selector', 'Available authenticated providers', {
-        providerCount: availableProviderIDs.length,
-        providerIDs: availableProviderIDs,
-        providers: Object.entries(providers).map(([id, info]: [string, any]) => ({
-            id,
-            source: info.source,
-            name: info.info?.name
-        }))
-    });
-
-    logger?.debug('model-selector', 'Attempting fallback models from providers', {
-        priorityOrder: PROVIDER_PRIORITY
-    });
 
     for (const providerID of PROVIDER_PRIORITY) {
-        if (!providers[providerID]) {
-            logger?.debug('model-selector', `Skipping ${providerID} (not authenticated)`);
-            continue;
-        }
+        if (!providers[providerID]) continue;
 
         const fallbackModelID = FALLBACK_MODELS[providerID];
-        if (!fallbackModelID) {
-            logger?.debug('model-selector', `Skipping ${providerID} (no fallback model configured)`);
-            continue;
-        }
-
-        logger?.debug('model-selector', `Attempting ${providerID}/${fallbackModelID}`);
+        if (!fallbackModelID) continue;
 
         try {
             const model = await opencodeAI.getLanguageModel(providerID, fallbackModelID);
-            logger?.info('model-selector', `✓ Successfully using fallback model`, {
-                providerID,
-                modelID: fallbackModelID
-            });
             return {
                 model,
                 modelInfo: { providerID, modelID: fallbackModelID },
@@ -255,9 +195,6 @@ export async function selectModel(
                 failedModel: failedModelInfo
             };
         } catch (error: any) {
-            logger?.warn('model-selector', `✗ Failed to use ${providerID}/${fallbackModelID}`, {
-                error: error.message
-            });
             continue;
         }
     }
@@ -270,14 +207,8 @@ export async function selectModel(
  * This can be used by the plugin to get the current session's model
  */
 export function extractModelFromSession(sessionState: any, logger?: Logger): ModelInfo | undefined {
-    logger?.debug('model-selector', 'Extracting model from session state');
-
     // Try to get from ACP session state
     if (sessionState?.model?.providerID && sessionState?.model?.modelID) {
-        logger?.info('model-selector', 'Found model in ACP session state', {
-            providerID: sessionState.model.providerID,
-            modelID: sessionState.model.modelID
-        });
         return {
             providerID: sessionState.model.providerID,
             modelID: sessionState.model.modelID
@@ -288,10 +219,6 @@ export function extractModelFromSession(sessionState: any, logger?: Logger): Mod
     if (sessionState?.messages && Array.isArray(sessionState.messages)) {
         const lastMessage = sessionState.messages[sessionState.messages.length - 1];
         if (lastMessage?.model?.providerID && lastMessage?.model?.modelID) {
-            logger?.info('model-selector', 'Found model in last message', {
-                providerID: lastMessage.model.providerID,
-                modelID: lastMessage.model.modelID
-            });
             return {
                 providerID: lastMessage.model.providerID,
                 modelID: lastMessage.model.modelID
@@ -299,6 +226,5 @@ export function extractModelFromSession(sessionState: any, logger?: Logger): Mod
         }
     }
 
-    logger?.warn('model-selector', 'Could not extract model from session state');
     return undefined;
 }
