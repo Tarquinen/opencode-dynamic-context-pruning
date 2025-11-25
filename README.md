@@ -78,7 +78,7 @@ If you want to ensure a specific version is always used or update your version, 
 ```json
 {
   "plugin": [
-    "@tarquinen/opencode-dcp@0.3.10"
+    "@tarquinen/opencode-dcp@0.3.12"
   ]
 }
 ```

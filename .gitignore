@@ -27,3 +27,6 @@ Thumbs.db
 
 # OpenCode
 .opencode/
+
+# Tests (local development only)
+tests/

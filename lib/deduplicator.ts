@@ -27,35 +27,35 @@ export function detectDuplicates(
     protectedTools: string[]
 ): DuplicateDetectionResult {
     const signatureMap = new Map<string, string[]>()
-    
+
     // Filter out protected tools before processing
     const deduplicatableIds = unprunedToolCallIds.filter(id => {
         const metadata = toolMetadata.get(id)
         return !metadata || !protectedTools.includes(metadata.tool)
     })
-    
+
     // Build map of signature -> [ids in chronological order]
     for (const id of deduplicatableIds) {
         const metadata = toolMetadata.get(id)
         if (!metadata) continue
-        
+
         const signature = createToolSignature(metadata.tool, metadata.parameters)
         if (!signatureMap.has(signature)) {
             signatureMap.set(signature, [])
         }
         signatureMap.get(signature)!.push(id)
     }
-    
+
     // Identify duplicates (keep only last occurrence)
     const duplicateIds: string[] = []
     const deduplicationDetails = new Map()
-    
+
     for (const [signature, ids] of signatureMap.entries()) {
         if (ids.length > 1) {
             const metadata = toolMetadata.get(ids[0])!
             const idsToRemove = ids.slice(0, -1)  // All except last
             duplicateIds.push(...idsToRemove)
-            
+
             deduplicationDetails.set(signature, {
                 toolName: metadata.tool,
                 parameterKey: extractParameterKey(metadata),
@@ -65,7 +65,7 @@ export function detectDuplicates(
             })
         }
     }
-    
+
     return { duplicateIds, deduplicationDetails }
 }
 
@@ -75,7 +75,7 @@ export function detectDuplicates(
  */
 function createToolSignature(tool: string, parameters?: any): string {
     if (!parameters) return tool
-    
+
     // Normalize parameters for consistent comparison
     const normalized = normalizeParameters(parameters)
     const sorted = sortObjectKeys(normalized)
@@ -91,7 +91,7 @@ function createToolSignature(tool: string, parameters?: any): string {
 function normalizeParameters(params: any): any {
     if (typeof params !== 'object' || params === null) return params
     if (Array.isArray(params)) return params
-    
+
     const normalized: any = {}
     for (const [key, value] of Object.entries(params)) {
         if (value !== undefined && value !== null) {
@@ -107,7 +107,7 @@ function normalizeParameters(params: any): any {
 function sortObjectKeys(obj: any): any {
     if (typeof obj !== 'object' || obj === null) return obj
     if (Array.isArray(obj)) return obj.map(sortObjectKeys)
-    
+
     const sorted: any = {}
     for (const key of Object.keys(obj).sort()) {
         sorted[key] = sortObjectKeys(obj[key])
@@ -136,9 +136,9 @@ function sortObjectKeys(obj: any): any {
  */
 export function extractParameterKey(metadata: { tool: string, parameters?: any }): string {
     if (!metadata.parameters) return ''
-    
+
     const { tool, parameters } = metadata
-    
+
     // ===== File Operation Tools =====
     if (tool === "read" && parameters.filePath) {
         return parameters.filePath
@@ -149,7 +149,7 @@ export function extractParameterKey(metadata: { tool: string, parameters?: any }
     if (tool === "edit" && parameters.filePath) {
         return parameters.filePath
     }
-    
+
     // ===== Directory/Search Tools =====
     if (tool === "list") {
         // path is optional, defaults to current directory
@@ -170,17 +170,17 @@ export function extractParameterKey(metadata: { tool: string, parameters?: any }
         }
         return '(unknown pattern)'
     }
-    
+
     // ===== Execution Tools =====
     if (tool === "bash") {
         if (parameters.description) return parameters.description
         if (parameters.command) {
-            return parameters.command.length > 50 
+            return parameters.command.length > 50
                 ? parameters.command.substring(0, 50) + "..."
                 : parameters.command
         }
     }
-    
+
     // ===== Web Tools =====
     if (tool === "webfetch" && parameters.url) {
         return parameters.url
@@ -191,7 +191,7 @@ export function extractParameterKey(metadata: { tool: string, parameters?: any }
     if (tool === "codesearch" && parameters.query) {
         return `"${parameters.query}"`
     }
-    
+
     // ===== Todo Tools =====
     // Note: Todo tools are stateful and in protectedTools by default
     if (tool === "todowrite") {
@@ -200,7 +200,7 @@ export function extractParameterKey(metadata: { tool: string, parameters?: any }
     if (tool === "todoread") {
         return "read todo list"
     }
-    
+
     // ===== Agent/Task Tools =====
     // Note: task is in protectedTools by default
     if (tool === "task" && parameters.description) {
@@ -210,7 +210,7 @@ export function extractParameterKey(metadata: { tool: string, parameters?: any }
     if (tool === "batch") {
         return `${parameters.tool_calls?.length || 0} parallel tools`
     }
-    
+
     // ===== Fallback =====
     // For unknown tools, custom tools, or tools without extractable keys
     // Check if parameters is empty or only has empty values

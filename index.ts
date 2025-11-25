@@ -3,6 +3,7 @@ import type { Plugin } from "@opencode-ai/plugin"
 import { getConfig } from "./lib/config"
 import { Logger } from "./lib/logger"
 import { Janitor, type SessionStats } from "./lib/janitor"
+import { checkForUpdates } from "./lib/version-checker"
 
 /**
  * Checks if a session is a subagent (child session)
@@ -144,6 +145,9 @@ const plugin: Plugin = (async (ctx) => {
         mode: config.pruningMode,
         model: config.model || "auto"
     })
+
+    // Check for updates on launch (fire and forget)
+    checkForUpdates(ctx.client).catch(() => {})
 
     return {
         /**

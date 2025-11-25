@@ -228,7 +228,7 @@ export class Janitor {
                     // Filter LLM results to only include IDs that were actually candidates
                     // (LLM sometimes returns duplicate IDs that were already filtered out)
                     const rawLlmPrunedIds = result.object.pruned_tool_call_ids
-                    llmPrunedIds = rawLlmPrunedIds.filter(id => 
+                    llmPrunedIds = rawLlmPrunedIds.filter(id =>
                         prunableToolCallIds.includes(id.toLowerCase())
                     )
 
@@ -263,7 +263,7 @@ export class Janitor {
 
             // Calculate which IDs are actually NEW (not already pruned)
             const finalNewlyPrunedIds = Array.from(expandedPrunedIds).filter(id => !alreadyPrunedIds.includes(id))
-            
+
             // finalPrunedIds includes everything (new + already pruned) for logging
             const finalPrunedIds = Array.from(expandedPrunedIds)
 
@@ -338,16 +338,16 @@ export class Janitor {
             const shortenedPath = this.shortenSinglePath(pathPart)
             return `${prefix} in ${shortenedPath}`
         }
-        
+
         return this.shortenSinglePath(input)
     }
-    
+
     /**
      * Shorten a single path string
      */
     private shortenSinglePath(path: string): string {
         const homeDir = require('os').homedir()
-        
+
         // Strip working directory FIRST (before ~ replacement) for cleaner relative paths
         if (this.workingDirectory) {
             if (path.startsWith(this.workingDirectory + '/')) {
@@ -358,7 +358,7 @@ export class Janitor {
                 return '.'
             }
         }
-        
+
         // Replace home directory with ~
         if (path.startsWith(homeDir)) {
             path = '~' + path.slice(homeDir.length)
@@ -375,7 +375,7 @@ export class Janitor {
             const workingDirWithTilde = this.workingDirectory.startsWith(homeDir)
                 ? '~' + this.workingDirectory.slice(homeDir.length)
                 : null
-            
+
             if (workingDirWithTilde && path.startsWith(workingDirWithTilde + '/')) {
                 return path.slice(workingDirWithTilde.length + 1)
             }
@@ -396,15 +396,15 @@ export class Janitor {
         if (prunedIds.length === 0) return messages
 
         const prunedIdsSet = new Set(prunedIds.map(id => id.toLowerCase()))
-        
+
         return messages.map(msg => {
             if (!msg.parts) return msg
-            
+
             return {
                 ...msg,
                 parts: msg.parts.map((part: any) => {
-                    if (part.type === 'tool' && 
-                        part.callID && 
+                    if (part.type === 'tool' &&
+                        part.callID &&
                         prunedIdsSet.has(part.callID.toLowerCase()) &&
                         part.state?.output) {
                         // Replace with the same placeholder used by the global fetch wrapper
@@ -427,20 +427,20 @@ export class Janitor {
      */
     private async calculateTokensSaved(prunedIds: string[], toolOutputs: Map<string, string>): Promise<number> {
         const outputsToTokenize: string[] = []
-        
+
         for (const prunedId of prunedIds) {
             const output = toolOutputs.get(prunedId)
             if (output) {
                 outputsToTokenize.push(output)
             }
         }
-        
+
         if (outputsToTokenize.length > 0) {
             // Use batch tokenization for efficiency (lazy loads gpt-tokenizer)
             const tokenCounts = await estimateTokensBatch(outputsToTokenize)
             return tokenCounts.reduce((sum, count) => sum + count, 0)
         }
-        
+
         return 0
     }
 
@@ -501,7 +501,7 @@ export class Janitor {
         const toolText = totalPruned === 1 ? 'tool' : 'tools'
 
         let message = `🧹 DCP: Saved ~${tokensFormatted} tokens (${totalPruned} ${toolText} pruned)`
-        
+
         // Add session totals if there's been more than one pruning run
         if (sessionStats.totalToolsPruned > totalPruned) {
             message += ` │ Session: ~${formatTokenCount(sessionStats.totalTokensSaved)} tokens, ${sessionStats.totalToolsPruned} tools`
@@ -536,7 +536,7 @@ export class Janitor {
 
         const toolText = deduplicatedIds.length === 1 ? 'tool' : 'tools'
         let message = `🧹 DCP: Saved ~${tokensFormatted} tokens (${deduplicatedIds.length} duplicate ${toolText} removed)`
-        
+
         // Add session totals if there's been more than one pruning run
         if (sessionStats.totalToolsPruned > deduplicatedIds.length) {
             message += ` │ Session: ~${formatTokenCount(sessionStats.totalTokensSaved)} tokens, ${sessionStats.totalToolsPruned} tools`
@@ -544,7 +544,7 @@ export class Janitor {
         message += '\n'
 
         // Group by tool type
-        const grouped = new Map<string, Array<{count: number, key: string}>>()
+        const grouped = new Map<string, Array<{ count: number, key: string }>>()
 
         for (const [_, details] of deduplicationDetails) {
             const { toolName, parameterKey, duplicateCount } = details
@@ -603,7 +603,7 @@ export class Janitor {
         const tokensFormatted = formatTokenCount(tokensSaved)
 
         let message = `🧹 DCP: Saved ~${tokensFormatted} tokens (${totalPruned} tool${totalPruned > 1 ? 's' : ''} pruned)`
-        
+
         // Add session totals if there's been more than one pruning run
         if (sessionStats.totalToolsPruned > totalPruned) {
             message += ` │ Session: ~${formatTokenCount(sessionStats.totalTokensSaved)} tokens, ${sessionStats.totalToolsPruned} tools`
@@ -615,7 +615,7 @@ export class Janitor {
             message += `\n📦 Duplicates removed (${deduplicatedIds.length}):\n`
 
             // Group by tool type
-            const grouped = new Map<string, Array<{count: number, key: string}>>()
+            const grouped = new Map<string, Array<{ count: number, key: string }>>()
 
             for (const [_, details] of deduplicationDetails) {
                 const { toolName, parameterKey, duplicateCount } = details
@@ -652,7 +652,7 @@ export class Janitor {
                     }
                 }
             }
-            
+
             // Handle any tools that weren't found in metadata (edge case)
             const foundToolNames = new Set(toolsSummary.keys())
             const missingTools = llmPrunedIds.filter(id => {
@@ -660,7 +660,7 @@ export class Janitor {
                 const metadata = toolMetadata.get(normalizedId)
                 return !metadata || !foundToolNames.has(metadata.tool)
             })
-            
+
             if (missingTools.length > 0) {
                 message += `  (${missingTools.length} tool${missingTools.length > 1 ? 's' : ''} with unknown metadata)\n`
             }
