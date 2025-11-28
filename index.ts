@@ -71,14 +71,22 @@ const plugin: Plugin = (async (ctx) => {
                     // 1. OpenAI style: role === 'tool'
                     // 2. Anthropic style: role === 'user' with content containing tool_result
                     const toolMessages = body.messages.filter((m: any) => {
-                        if (m.role === 'tool') return true
+                        if (m.role === 'tool') return true;
                         if (m.role === 'user' && Array.isArray(m.content)) {
                             for (const part of m.content) {
-                                if (part.type === 'tool_result') return true
+                                if (part.type === 'tool_result') return true;
                             }
                         }
-                        return false
-                    })
+                        return false;
+                    });
+                    const thinkingMessages = body.messages.filter((m: any) => {
+                        if (m.role === 'assistant' && Array.isArray(m.content)) {
+                            for (const part of m.content) {
+                                if (part.type === 'thinking') return true;
+                            }
+                        }
+                        return false;
+                    });
 
                     const allSessions = await ctx.client.session.list()
                     const allPrunedIds = new Set<string>()
@@ -91,9 +99,36 @@ const plugin: Plugin = (async (ctx) => {
                         }
                     }
 
-                    if (toolMessages.length > 0 && allPrunedIds.size > 0) {
-                        let replacedCount = 0
+                    let replacedCount = 0;
 
+                    if (thinkingMessages.length > 0) {
+                        const keepBlocks = config.keepReasoningBlocks || 0;
+                        const messagesToPrune = keepBlocks > 0 ? 
+                            thinkingMessages.slice(0, -keepBlocks || undefined) : 
+                            thinkingMessages;
+                        const prunableSet = new Set(messagesToPrune);
+
+                        body.messages = body.messages.map((m: any) => {
+                            if (!prunableSet.has(m)) {
+                                return m;
+                            }
+                            replacedCount++;
+                            return {
+                                ...m,
+                                content: m.content.map((part: any) => {
+                                    if (part.type === 'thinking') {
+                                        return {
+                                            ...part,
+                                            thinking: '[Thinking removed to save context]'
+                                        };
+                                    }
+                                    return part;
+                                })
+                            };
+                        });
+                    }
+
+                    if (toolMessages.length > 0 && allPrunedIds.size > 0) {
                         body.messages = body.messages.map((m: any) => {
                             // OpenAI style: role === 'tool' with tool_call_id
                             if (m.role === 'tool' && allPrunedIds.has(m.tool_call_id?.toLowerCase())) {
@@ -125,46 +160,46 @@ const plugin: Plugin = (async (ctx) => {
 
                             return m
                         })
+                    }
 
-                        if (replacedCount > 0) {
-                            logger.info("fetch", "Replaced pruned tool outputs", {
-                                replaced: replacedCount,
-                                total: toolMessages.length
-                            })
+                    if (replacedCount > 0) {
+                        logger.info("fetch", "Replaced outputs", {
+                            replaced: replacedCount,
+                            total: toolMessages.length
+                        })
 
-                            if (logger.enabled) {
-                                // Fetch session messages to extract reasoning blocks
-                                let sessionMessages: any[] | undefined
-                                try {
-                                    const activeSessions = allSessions.data?.filter(s => !s.parentID) || []
-                                    if (activeSessions.length > 0) {
-                                        const mostRecentSession = activeSessions[0]
-                                        const messagesResponse = await ctx.client.session.messages({
-                                            path: { id: mostRecentSession.id },
-                                            query: { limit: 100 }
-                                        })
-                                        sessionMessages = Array.isArray(messagesResponse.data)
-                                            ? messagesResponse.data
-                                            : Array.isArray(messagesResponse) ? messagesResponse : undefined
-                                    }
-                                } catch (e) {
-                                    // Silently continue without session messages
+                        if (logger.enabled) {
+                            // Fetch session messages to extract reasoning blocks
+                            let sessionMessages: any[] | undefined
+                            try {
+                                const activeSessions = allSessions.data?.filter(s => !s.parentID) || []
+                                if (activeSessions.length > 0) {
+                                    const mostRecentSession = activeSessions[0]
+                                    const messagesResponse = await ctx.client.session.messages({
+                                        path: { id: mostRecentSession.id },
+                                        query: { limit: 100 }
+                                    })
+                                    sessionMessages = Array.isArray(messagesResponse.data)
+                                        ? messagesResponse.data
+                                        : Array.isArray(messagesResponse) ? messagesResponse : undefined
                                 }
-
-                                await logger.saveWrappedContext(
-                                    "global",
-                                    body.messages,
-                                    {
-                                        url: typeof input === 'string' ? input : 'URL object',
-                                        replacedCount,
-                                        totalMessages: body.messages.length
-                                    },
-                                    sessionMessages
-                                )
+                            } catch (e) {
+                                // Silently continue without session messages
                             }
 
-                            init.body = JSON.stringify(body)
+                            await logger.saveWrappedContext(
+                                "global",
+                                body.messages,
+                                {
+                                    url: typeof input === 'string' ? input : 'URL object',
+                                    replacedCount,
+                                    totalMessages: body.messages.length
+                                },
+                                sessionMessages
+                            )
                         }
+
+                        init.body = JSON.stringify(body)
                     }
                 }
             } catch (e) {

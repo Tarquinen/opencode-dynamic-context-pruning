@@ -14,6 +14,7 @@ export interface PluginConfig {
     model?: string
     showModelErrorToasts?: boolean
     strictModelSelection?: boolean
+    keepReasoningBlocks?: number
     pruning_summary: "off" | "minimal" | "detailed"
     strategies: {
         onIdle: PruningStrategy[]
@@ -33,9 +34,10 @@ const defaultConfig: PluginConfig = {
     showModelErrorToasts: true,
     strictModelSelection: false,
     pruning_summary: 'detailed',
+    keepReasoningBlocks: 10,
     strategies: {
-        onIdle: ['deduplication', 'ai-analysis', "strip-reasoning"],
-        onTool: ['deduplication', 'ai-analysis', "strip-reasoning"]
+        onIdle: ['deduplication', 'ai-analysis'],
+        onTool: ['deduplication', 'ai-analysis']
     }
 }
 
@@ -46,6 +48,7 @@ const VALID_CONFIG_KEYS = new Set([
     'model',
     'showModelErrorToasts',
     'strictModelSelection',
+    'keepReasoningBlocks',
     'pruning_summary',
     'strategies'
 ])
@@ -109,13 +112,16 @@ function createDefaultConfig(): void {
   "showModelErrorToasts": true,
   // Only run AI analysis with session model or configured model (disables fallback models)
   "strictModelSelection": false,
-  // Pruning strategies: "deduplication", "ai-analysis" (empty array = disabled)
+  // Pruning strategies: "deduplication", "ai-analysis", "strip-reasoning" [EXPERIMENTAL]
+  // (empty array = disabled)
   "strategies": {
     // Strategies to run when session goes idle
     "onIdle": ["deduplication", "ai-analysis"],
     // Strategies to run when AI calls context_pruning tool
     "onTool": ["deduplication", "ai-analysis"]
   },
+  // Keep reasoning metadata for the last N reasoning blocks (older blocks are removed)
+  "keepReasoningBlocks": 10,
   // Summary display: "off", "minimal", or "detailed"
   "pruning_summary": "detailed",
   // Tools that should never be pruned
@@ -195,6 +201,7 @@ export function getConfig(ctx?: PluginInput): ConfigResult {
                     model: globalConfig.model ?? config.model,
                     showModelErrorToasts: globalConfig.showModelErrorToasts ?? config.showModelErrorToasts,
                     strictModelSelection: globalConfig.strictModelSelection ?? config.strictModelSelection,
+                    keepReasoningBlocks: globalConfig.keepReasoningBlocks ?? config.keepReasoningBlocks,
                     strategies: mergeStrategies(config.strategies, globalConfig.strategies as any),
                     pruning_summary: globalConfig.pruning_summary ?? config.pruning_summary
                 }
@@ -225,6 +232,7 @@ export function getConfig(ctx?: PluginInput): ConfigResult {
                     model: projectConfig.model ?? config.model,
                     showModelErrorToasts: projectConfig.showModelErrorToasts ?? config.showModelErrorToasts,
                     strictModelSelection: projectConfig.strictModelSelection ?? config.strictModelSelection,
+                    keepReasoningBlocks: projectConfig.keepReasoningBlocks ?? config.keepReasoningBlocks,
                     strategies: mergeStrategies(config.strategies, projectConfig.strategies as any),
                     pruning_summary: projectConfig.pruning_summary ?? config.pruning_summary
                 }

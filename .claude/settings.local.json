@@ -7,7 +7,9 @@
       "Bash(done)",
       "WebSearch",
       "WebFetch(domain:ai-sdk.dev)",
-      "Bash(npm run typecheck:*)"
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run test:*)"
     ],
     "deny": [],
     "ask": []
