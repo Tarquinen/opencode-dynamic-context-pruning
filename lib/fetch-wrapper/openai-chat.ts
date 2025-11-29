@@ -6,6 +6,7 @@ import {
     getMostRecentActiveSession
 } from "./types"
 import { cacheToolParametersFromMessages } from "../tool-cache"
+import { injectNudge, injectSynth } from "../synth-instruction"
 
 /**
  * Handles OpenAI Chat Completions format (body.messages with role='tool').
@@ -23,6 +24,25 @@ export async function handleOpenAIChatAndAnthropic(
     // Cache tool parameters from messages
     cacheToolParametersFromMessages(body.messages, ctx.state)
 
+    let modified = false
+
+    // Inject synthetic instructions if onTool strategies are enabled
+    if (ctx.config.strategies.onTool.length > 0) {
+        // Inject periodic nudge based on tool result count
+        if (ctx.config.nudge_freq > 0) {
+            if (injectNudge(body.messages, ctx.toolTracker, ctx.prompts.nudgeInstruction, ctx.config.nudge_freq)) {
+                ctx.logger.info("fetch", "Injected nudge instruction")
+                modified = true
+            }
+        }
+
+        // Inject synthetic instruction into last user message
+        if (injectSynth(body.messages, ctx.prompts.synthInstruction)) {
+            ctx.logger.info("fetch", "Injected synthetic instruction")
+            modified = true
+        }
+    }
+
     // Check for tool messages in both formats:
     // 1. OpenAI style: role === 'tool'
     // 2. Anthropic style: role === 'user' with content containing tool_result
@@ -39,7 +59,7 @@ export async function handleOpenAIChatAndAnthropic(
     const { allSessions, allPrunedIds } = await getAllPrunedIds(ctx.client, ctx.state)
 
     if (toolMessages.length === 0 || allPrunedIds.size === 0) {
-        return { modified: false, body }
+        return { modified, body }
     }
 
     let replacedCount = 0
@@ -103,5 +123,5 @@ export async function handleOpenAIChatAndAnthropic(
         return { modified: true, body }
     }
 
-    return { modified: false, body }
+    return { modified, body }
 }

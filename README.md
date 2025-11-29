@@ -28,6 +28,13 @@ DCP implements two complementary strategies:
 **Deduplication** — Fast, zero-cost pruning that identifies repeated tool calls (e.g., reading the same file multiple times) and keeps only the most recent output. Runs instantly with no LLM calls.
 
 **AI Analysis** — Uses a language model to semantically analyze conversation context and identify tool outputs that are no longer relevant to the current task. More thorough but incurs LLM cost.
+
+## Context Pruning Tool
+
+When `strategies.onTool` is enabled, DCP exposes a `context_pruning` tool to Opencode that the AI can call to trigger pruning on demand. To help the AI use this tool effectively, DCP also injects guidance.
+
+When `nudge_freq` is enabled, injects reminders (every `nudge_freq` tool results) prompting the AI to consider pruning when appropriate.
+
 ## How It Works
 
 DCP is **non-destructive**—pruning state is kept in memory only. When requests go to your LLM, DCP replaces pruned outputs with a placeholder; original session data stays intact.
@@ -46,6 +53,7 @@ DCP uses its own config file (`~/.config/opencode/dcp.jsonc` or `.opencode/dcp.j
 | `showModelErrorToasts` | `true` | Show notifications on model fallback |
 | `strictModelSelection` | `false` | Only run AI analysis with session or configured model (disables fallback models) |
 | `pruning_summary` | `"detailed"` | `"off"`, `"minimal"`, or `"detailed"` |
+| `nudge_freq` | `5` | Remind AI to prune every N tool results (0 = disabled) |
 | `protectedTools` | `["task", "todowrite", "todoread", "context_pruning"]` | Tools that are never pruned |
 | `strategies.onIdle` | `["deduplication", "ai-analysis"]` | Strategies for automatic pruning |
 | `strategies.onTool` | `["deduplication", "ai-analysis"]` | Strategies when AI calls `context_pruning` |

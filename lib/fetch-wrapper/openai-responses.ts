@@ -6,6 +6,7 @@ import {
     getMostRecentActiveSession
 } from "./types"
 import { cacheToolParametersFromInput } from "../tool-cache"
+import { injectNudgeResponses, injectSynthResponses } from "../synth-instruction"
 
 /**
  * Handles OpenAI Responses API format (body.input array with function_call_output items).
@@ -23,17 +24,36 @@ export async function handleOpenAIResponses(
     // Cache tool parameters from input
     cacheToolParametersFromInput(body.input, ctx.state)
 
+    let modified = false
+
+    // Inject synthetic instructions if onTool strategies are enabled
+    if (ctx.config.strategies.onTool.length > 0) {
+        // Inject periodic nudge based on tool result count
+        if (ctx.config.nudge_freq > 0) {
+            if (injectNudgeResponses(body.input, ctx.toolTracker, ctx.prompts.nudgeInstruction, ctx.config.nudge_freq)) {
+                ctx.logger.info("fetch", "Injected nudge instruction (Responses API)")
+                modified = true
+            }
+        }
+
+        // Inject synthetic instruction into last user message
+        if (injectSynthResponses(body.input, ctx.prompts.synthInstruction)) {
+            ctx.logger.info("fetch", "Injected synthetic instruction (Responses API)")
+            modified = true
+        }
+    }
+
     // Check for function_call_output items
     const functionOutputs = body.input.filter((item: any) => item.type === 'function_call_output')
 
     if (functionOutputs.length === 0) {
-        return { modified: false, body }
+        return { modified, body }
     }
 
     const { allSessions, allPrunedIds } = await getAllPrunedIds(ctx.client, ctx.state)
 
     if (allPrunedIds.size === 0) {
-        return { modified: false, body }
+        return { modified, body }
     }
 
     let replacedCount = 0
@@ -77,5 +97,5 @@ export async function handleOpenAIResponses(
         return { modified: true, body }
     }
 
-    return { modified: false, body }
+    return { modified, body }
 }

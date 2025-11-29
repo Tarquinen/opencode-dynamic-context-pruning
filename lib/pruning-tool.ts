@@ -71,7 +71,7 @@ export function createPruningTool(janitor: Janitor, config: PluginConfig): Retur
                 return "No prunable tool outputs found. Context is already optimized.\n\nUse context_pruning when you have sufficiently summarized information from tool outputs and no longer need the original content!"
             }
 
-            return janitor.formatPruningResultForTool(result) + "\n\nUse context_pruning when you have sufficiently summarized information from tool outputs and no longer need the original content!"
+            return janitor.formatPruningResultForTool(result) + "\n\nKeep using context_pruning when you have sufficiently summarized information from tool outputs and no longer need the original content!"
         },
     })
 }

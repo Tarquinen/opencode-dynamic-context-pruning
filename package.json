@@ -8,7 +8,7 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "npm run clean && tsc",
+    "build": "npm run clean && tsc && cp -r lib/prompts dist/lib/prompts",
     "postbuild": "rm -rf dist/logs",
     "prepublishOnly": "npm run build",
     "dev": "opencode plugin dev",

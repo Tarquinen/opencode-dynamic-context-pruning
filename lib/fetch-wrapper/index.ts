@@ -1,11 +1,13 @@
 import type { PluginState } from "../state"
 import type { Logger } from "../logger"
-import type { FetchHandlerContext } from "./types"
+import type { FetchHandlerContext, SynthPrompts } from "./types"
+import type { ToolTracker } from "../synth-instruction"
+import type { PluginConfig } from "../config"
 import { handleOpenAIChatAndAnthropic } from "./openai-chat"
 import { handleGemini } from "./gemini"
 import { handleOpenAIResponses } from "./openai-responses"
 
-export type { FetchHandlerContext, FetchHandlerResult } from "./types"
+export type { FetchHandlerContext, FetchHandlerResult, SynthPrompts } from "./types"
 
 /**
  * Creates a wrapped global fetch that intercepts API calls and performs
@@ -20,14 +22,20 @@ export type { FetchHandlerContext, FetchHandlerResult } from "./types"
 export function installFetchWrapper(
     state: PluginState,
     logger: Logger,
-    client: any
+    client: any,
+    config: PluginConfig,
+    toolTracker: ToolTracker,
+    prompts: SynthPrompts
 ): () => void {
     const originalGlobalFetch = globalThis.fetch
     
     const ctx: FetchHandlerContext = {
         state,
         logger,
-        client
+        client,
+        config,
+        toolTracker,
+        prompts
     }
 
     globalThis.fetch = async (input: any, init?: any) => {

@@ -1,3 +1,11 @@
+import { readFileSync } from "fs"
+import { join } from "path"
+
+export function loadPrompt(name: string): string {
+    const filePath = join(__dirname, "prompts", `${name}.txt`)
+    return readFileSync(filePath, "utf8").trim()
+}
+
 function minimizeMessages(messages: any[], alreadyPrunedIds?: string[], protectedToolCallIds?: string[]): any[] {
     const prunedIdsSet = alreadyPrunedIds ? new Set(alreadyPrunedIds.map(id => id.toLowerCase())) : new Set()
     const protectedIdsSet = protectedToolCallIds ? new Set(protectedToolCallIds.map(id => id.toLowerCase())) : new Set()

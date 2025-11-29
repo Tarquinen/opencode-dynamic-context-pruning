@@ -1,14 +1,25 @@
 import type { PluginState } from "../state"
 import type { Logger } from "../logger"
+import type { ToolTracker } from "../synth-instruction"
+import type { PluginConfig } from "../config"
 
 /** The message used to replace pruned tool output content */
 export const PRUNED_CONTENT_MESSAGE = '[Output removed to save context - information superseded or no longer needed]'
+
+/** Prompts used for synthetic instruction injection */
+export interface SynthPrompts {
+    synthInstruction: string
+    nudgeInstruction: string
+}
 
 /** Context passed to each format-specific handler */
 export interface FetchHandlerContext {
     state: PluginState
     logger: Logger
     client: any
+    config: PluginConfig
+    toolTracker: ToolTracker
+    prompts: SynthPrompts
 }
 
 /** Result from a format handler indicating what happened */

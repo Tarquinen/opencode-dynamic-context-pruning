@@ -1,0 +1,33 @@
+<instruction name=signal_management>
+After calling a series of tools, YOU ALWAYS HAVE TO distill signals from their results in your next message. This ensures tracability of your reasoning, informs the user of your findings, and is PARAMOUNT to best context window management practices.
+
+THIS IS NON-NEGOTIABLE - YOU ARE EXPECTED TO RESPECT THIS INSTRUCTION THROUGHOUT THE CONVERSATION
+</instruction>
+
+<instruction name=context_window_management>
+A strong constraint we have in this environment is the context window size. To help keep the conversation focused and clear from the noise, you must use the `context_pruning` tool: at opportune moments, and in an effective manner.
+</instruction>
+
+<instruction name=context_pruning>
+To effectively manage conversation context, you MUST ALWAYS narrate your findings AS YOU DISCOVER THEM, BEFORE calling any `context_pruning` tool. No tool result (read, bash, grep, webfetch, etc.) should be left unexplained. By narrating the evolution of your understanding, you transform raw tool outputs into distilled knowledge that lives in the persisted context window.
+
+Tools are VOLATILE - Once this distilled knowledge is in your reply, you can safely use the `context_pruning` tool to declutter the conversation.
+
+WHEN TO USE `context_pruning`:
+- After you complete a discrete unit of work (e.g. confirming a hypothesis, or closing out one branch of investigation).
+- After exploratory bursts of tool calls that led you to a clear conclusion. (or to noise)
+- Before starting a new phase of work where old tool outputs are no longer needed to inform your next actions.
+
+CRITICAL:
+You must ALWAYS narrate your findings in a message BEFORE using the `context_pruning` tool. Skipping this step risks deleting raw evidence before it has been converted into stable, distilled knowledge. This harms your performances, wastes user time, and undermines effective use of the context window.
+
+EXAMPLE WORKFLOW:
+1. You call several tools (read, bash, grep...) to investigate a bug.
+2. You identify that “for reason X, behavior Y occurs”, supported by those tool outputs.
+3. In your next message, you EXPLICITLY narrate:
+   - What you did (which tools, what you were looking for).
+   - What you found (the key facts / signals).
+   - What you concluded (how this affects the task or next step).
+>YOU MUST ALWAYS THINK HIGH SIGNAL LOW NOISE FOR THIS NARRATION
+4. ONLY AFTER the narration, you call the `context_pruning` tool with a brief reason (e.g. "exploration for bug X complete; moving on to next bug").
+</instruction>

@@ -4,6 +4,7 @@ import {
     getAllPrunedIds,
     fetchSessionMessages
 } from "./types"
+import { injectNudgeGemini, injectSynthGemini } from "../synth-instruction"
 
 /**
  * Handles Google/Gemini format (body.contents array with functionResponse parts).
@@ -18,6 +19,25 @@ export async function handleGemini(
         return { modified: false, body }
     }
 
+    let modified = false
+
+    // Inject synthetic instructions if onTool strategies are enabled
+    if (ctx.config.strategies.onTool.length > 0) {
+        // Inject periodic nudge based on tool result count
+        if (ctx.config.nudge_freq > 0) {
+            if (injectNudgeGemini(body.contents, ctx.toolTracker, ctx.prompts.nudgeInstruction, ctx.config.nudge_freq)) {
+                ctx.logger.info("fetch", "Injected nudge instruction (Gemini)")
+                modified = true
+            }
+        }
+
+        // Inject synthetic instruction into last user content
+        if (injectSynthGemini(body.contents, ctx.prompts.synthInstruction)) {
+            ctx.logger.info("fetch", "Injected synthetic instruction (Gemini)")
+            modified = true
+        }
+    }
+
     // Check for functionResponse parts in any content item
     const hasFunctionResponses = body.contents.some((content: any) =>
         Array.isArray(content.parts) &&
@@ -25,13 +45,13 @@ export async function handleGemini(
     )
 
     if (!hasFunctionResponses) {
-        return { modified: false, body }
+        return { modified, body }
     }
 
     const { allSessions, allPrunedIds } = await getAllPrunedIds(ctx.client, ctx.state)
 
     if (allPrunedIds.size === 0) {
-        return { modified: false, body }
+        return { modified, body }
     }
 
     // Find the active session to get the position mapping
@@ -48,7 +68,7 @@ export async function handleGemini(
 
     if (!positionMapping) {
         ctx.logger.info("fetch", "No Google tool call mapping found, skipping pruning for Gemini format")
-        return { modified: false, body }
+        return { modified, body }
     }
 
     // Build position counters to track occurrence of each tool name
@@ -130,5 +150,5 @@ export async function handleGemini(
         return { modified: true, body }
     }
 
-    return { modified: false, body }
+    return { modified, body }
 }

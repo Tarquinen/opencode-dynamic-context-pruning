@@ -15,6 +15,7 @@ export interface PluginConfig {
     showModelErrorToasts?: boolean
     strictModelSelection?: boolean
     pruning_summary: "off" | "minimal" | "detailed"
+    nudge_freq: number
     strategies: {
         onIdle: PruningStrategy[]
         onTool: PruningStrategy[]
@@ -33,6 +34,7 @@ const defaultConfig: PluginConfig = {
     showModelErrorToasts: true,
     strictModelSelection: false,
     pruning_summary: 'detailed',
+    nudge_freq: 5,
     strategies: {
         onIdle: ['deduplication', 'ai-analysis'],
         onTool: ['deduplication', 'ai-analysis']
@@ -47,6 +49,7 @@ const VALID_CONFIG_KEYS = new Set([
     'showModelErrorToasts',
     'strictModelSelection',
     'pruning_summary',
+    'nudge_freq',
     'strategies'
 ])
 
@@ -118,6 +121,8 @@ function createDefaultConfig(): void {
   },
   // Summary display: "off", "minimal", or "detailed"
   "pruning_summary": "detailed",
+  // How often to nudge the AI to prune (every N tool results, 0 = disabled)
+  "nudge_freq": 5,
   // Tools that should never be pruned
   "protectedTools": ["task", "todowrite", "todoread", "context_pruning"]
 }
@@ -196,7 +201,8 @@ export function getConfig(ctx?: PluginInput): ConfigResult {
                     showModelErrorToasts: globalConfig.showModelErrorToasts ?? config.showModelErrorToasts,
                     strictModelSelection: globalConfig.strictModelSelection ?? config.strictModelSelection,
                     strategies: mergeStrategies(config.strategies, globalConfig.strategies as any),
-                    pruning_summary: globalConfig.pruning_summary ?? config.pruning_summary
+                    pruning_summary: globalConfig.pruning_summary ?? config.pruning_summary,
+                    nudge_freq: globalConfig.nudge_freq ?? config.nudge_freq
                 }
                 logger.info('config', 'Loaded global config', { path: configPaths.global })
             }
@@ -226,7 +232,8 @@ export function getConfig(ctx?: PluginInput): ConfigResult {
                     showModelErrorToasts: projectConfig.showModelErrorToasts ?? config.showModelErrorToasts,
                     strictModelSelection: projectConfig.strictModelSelection ?? config.strictModelSelection,
                     strategies: mergeStrategies(config.strategies, projectConfig.strategies as any),
-                    pruning_summary: projectConfig.pruning_summary ?? config.pruning_summary
+                    pruning_summary: projectConfig.pruning_summary ?? config.pruning_summary,
+                    nudge_freq: projectConfig.nudge_freq ?? config.nudge_freq
                 }
                 logger.info('config', 'Loaded project config (overrides global)', { path: configPaths.project })
             }
