@@ -2,6 +2,7 @@ export interface ToolTracker {
     seenToolResultIds: Set<string>
     toolResultCount: number
     skipNextIdle: boolean
+    getToolName?: (callId: string) => string | undefined
 }
 
 export function createToolTracker(): ToolTracker {
@@ -53,8 +54,8 @@ const openaiAdapter: MessageFormatAdapter = {
                 if (!tracker.seenToolResultIds.has(id)) {
                     tracker.seenToolResultIds.add(id)
                     newCount++
-                    // Reset skipNextIdle if this isn't our pruning tool
-                    if (m.name !== 'context_pruning') {
+                    const toolName = m.name || tracker.getToolName?.(m.tool_call_id)
+                    if (toolName !== 'context_pruning') {
                         tracker.skipNextIdle = false
                     }
                 }
@@ -65,8 +66,8 @@ const openaiAdapter: MessageFormatAdapter = {
                         if (!tracker.seenToolResultIds.has(id)) {
                             tracker.seenToolResultIds.add(id)
                             newCount++
-                            // Reset skipNextIdle if this isn't our pruning tool
-                            if (part.name !== 'context_pruning') {
+                            const toolName = tracker.getToolName?.(part.tool_use_id)
+                            if (toolName !== 'context_pruning') {
                                 tracker.skipNextIdle = false
                             }
                         }
@@ -131,7 +132,6 @@ const geminiAdapter: MessageFormatAdapter = {
                     if (!tracker.seenToolResultIds.has(pseudoId)) {
                         tracker.seenToolResultIds.add(pseudoId)
                         newCount++
-                        // Reset skipNextIdle if this isn't our pruning tool
                         if (funcName !== 'context_pruning') {
                             tracker.skipNextIdle = false
                         }
@@ -179,8 +179,8 @@ const responsesAdapter: MessageFormatAdapter = {
                 if (!tracker.seenToolResultIds.has(id)) {
                     tracker.seenToolResultIds.add(id)
                     newCount++
-                    // Reset skipNextIdle if this isn't our pruning tool
-                    if (item.name !== 'context_pruning') {
+                    const toolName = item.name || tracker.getToolName?.(item.call_id)
+                    if (toolName !== 'context_pruning') {
                         tracker.skipNextIdle = false
                     }
                 }

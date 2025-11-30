@@ -25,7 +25,7 @@ const plugin: Plugin = (async (ctx) => {
     // Initialize core components
     const logger = new Logger(config.debug)
     const state = createPluginState()
-    
+
     const janitor = new Janitor(
         ctx.client,
         state.prunedIds,
@@ -43,6 +43,13 @@ const plugin: Plugin = (async (ctx) => {
 
     // Create tool tracker and load prompts for synthetic instruction injection
     const toolTracker = createToolTracker()
+
+    // Wire up tool name lookup from the cached tool parameters
+    toolTracker.getToolName = (callId: string) => {
+        const entry = state.toolParameters.get(callId)
+        return entry?.tool
+    }
+
     const prompts = {
         synthInstruction: loadPrompt("synthetic"),
         nudgeInstruction: loadPrompt("nudge")
@@ -59,7 +66,7 @@ const plugin: Plugin = (async (ctx) => {
 
     // Check for updates after a delay
     setTimeout(() => {
-        checkForUpdates(ctx.client, logger).catch(() => {})
+        checkForUpdates(ctx.client, logger).catch(() => { })
     }, 5000)
 
     // Show migration toast if there were config migrations
