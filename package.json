@@ -40,7 +40,7 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.27",
     "@opencode-ai/sdk": "latest",
-    "@tarquinen/opencode-auth-provider": "^0.1.6",
+    "@tarquinen/opencode-auth-provider": "^0.1.7",
     "ai": "^5.0.98",
     "gpt-tokenizer": "^3.4.0",
     "jsonc-parser": "^3.3.1",
