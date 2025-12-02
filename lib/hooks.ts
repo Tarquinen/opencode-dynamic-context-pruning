@@ -75,14 +75,12 @@ export function createChatParamsHandler(
         // Track the last seen session ID for fetch wrapper correlation
         state.lastSeenSessionId = sessionId
 
-        // Check if this is a subagent session and track it to skip fetch wrapper processing
-        if (!state.subagentSessions.has(sessionId)) {
+        // Check if this is a subagent session
+        if (!state.checkedSessions.has(sessionId)) {
+            state.checkedSessions.add(sessionId)
             const isSubagent = await isSubagentSession(client, sessionId)
             if (isSubagent) {
                 state.subagentSessions.add(sessionId)
-                logger.info("chat.params", "Detected subagent session, will skip DCP processing", {
-                    sessionId: sessionId.substring(0, 8)
-                })
             }
         }
 
