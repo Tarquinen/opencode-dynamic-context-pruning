@@ -36,8 +36,8 @@ const defaultConfig: PluginConfig = {
     pruning_summary: 'detailed',
     nudge_freq: 10,
     strategies: {
-        onIdle: ['deduplication', 'ai-analysis'],
-        onTool: ['deduplication', 'ai-analysis']
+        onIdle: ['ai-analysis'],
+        onTool: ['ai-analysis']
     }
 }
 

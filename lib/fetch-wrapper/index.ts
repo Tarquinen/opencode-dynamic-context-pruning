@@ -6,6 +6,7 @@ import type { PluginConfig } from "../config"
 import { handleOpenAIChatAndAnthropic } from "./openai-chat"
 import { handleGemini } from "./gemini"
 import { handleOpenAIResponses } from "./openai-responses"
+import { detectDuplicates } from "../deduplicator"
 
 export type { FetchHandlerContext, FetchHandlerResult, SynthPrompts } from "./types"
 
@@ -75,6 +76,21 @@ export function installFetchWrapper(
                     const result = await handleOpenAIResponses(body, ctx, inputUrl)
                     if (result.modified) {
                         modified = true
+                    }
+                }
+
+                // Run deduplication after handlers have populated toolParameters cache
+                const sessionId = state.lastSeenSessionId
+                if (sessionId && state.toolParameters.size > 0) {
+                    const toolIds = Array.from(state.toolParameters.keys())
+                    const alreadyPruned = state.prunedIds.get(sessionId) ?? []
+                    const alreadyPrunedLower = new Set(alreadyPruned.map(id => id.toLowerCase()))
+                    const unpruned = toolIds.filter(id => !alreadyPrunedLower.has(id.toLowerCase()))
+                    if (unpruned.length > 0) {
+                        const { duplicateIds } = detectDuplicates(state.toolParameters, unpruned, config.protectedTools)
+                        if (duplicateIds.length > 0) {
+                            state.prunedIds.set(sessionId, [...new Set([...alreadyPruned, ...duplicateIds])])
+                        }
                     }
                 }
 
