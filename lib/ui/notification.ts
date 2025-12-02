@@ -79,7 +79,8 @@ function buildMinimalMessage(data: NotificationData): string {
     const hasGcActivity = data.gcPending && data.gcPending.toolsDeduped > 0
 
     if (hasAiPruning) {
-        const tokensSaved = formatTokenCount(data.aiTokensSaved)
+        const gcTokens = hasGcActivity ? data.gcPending!.tokensCollected : 0
+        const totalSaved = formatTokenCount(data.aiTokensSaved + gcTokens)
         const toolText = data.aiPrunedCount === 1 ? 'tool' : 'tools'
 
         let cycleStats = `${data.aiPrunedCount} ${toolText}`
@@ -87,7 +88,7 @@ function buildMinimalMessage(data: NotificationData): string {
             cycleStats += `, ♻️ ~${formatTokenCount(data.gcPending!.tokensCollected)}`
         }
 
-        let message = `🧹 DCP: ~${tokensSaved} saved (${cycleStats})`
+        let message = `🧹 DCP: ~${totalSaved} saved (${cycleStats})`
         message += buildSessionSuffix(data.sessionStats, data.aiPrunedCount)
 
         return message
@@ -108,7 +109,8 @@ function buildDetailedMessage(data: NotificationData, workingDirectory?: string)
     let message: string
 
     if (hasAiPruning) {
-        const tokensSaved = formatTokenCount(data.aiTokensSaved)
+        const gcTokens = hasGcActivity ? data.gcPending!.tokensCollected : 0
+        const totalSaved = formatTokenCount(data.aiTokensSaved + gcTokens)
         const toolText = data.aiPrunedCount === 1 ? 'tool' : 'tools'
 
         let cycleStats = `${data.aiPrunedCount} ${toolText}`
@@ -116,7 +118,7 @@ function buildDetailedMessage(data: NotificationData, workingDirectory?: string)
             cycleStats += `, ♻️ ~${formatTokenCount(data.gcPending!.tokensCollected)}`
         }
 
-        message = `🧹 DCP: ~${tokensSaved} saved (${cycleStats})`
+        message = `🧹 DCP: ~${totalSaved} saved (${cycleStats})`
         message += buildSessionSuffix(data.sessionStats, data.aiPrunedCount)
         message += '\n'
 
