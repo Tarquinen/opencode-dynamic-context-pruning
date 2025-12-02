@@ -1,12 +1,12 @@
 import type { PluginState } from "../state"
 import type { Logger } from "../logger"
 import type { FetchHandlerContext, SynthPrompts } from "./types"
-import type { ToolTracker } from "../synth-instruction"
+import type { ToolTracker } from "../api-formats/synth-instruction"
 import type { PluginConfig } from "../config"
 import { handleOpenAIChatAndAnthropic } from "./openai-chat"
 import { handleGemini } from "./gemini"
 import { handleOpenAIResponses } from "./openai-responses"
-import { detectDuplicates } from "../deduplicator"
+import { detectDuplicates } from "../core/deduplicator"
 
 export type { FetchHandlerContext, FetchHandlerResult, SynthPrompts } from "./types"
 

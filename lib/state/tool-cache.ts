@@ -1,4 +1,4 @@
-import type { PluginState } from "./state"
+import type { PluginState } from "./index"
 
 /**
  * Cache tool parameters from OpenAI Chat Completions style messages.

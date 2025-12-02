@@ -1,16 +1,16 @@
 import { z } from "zod"
-import type { Logger } from "./logger"
-import type { PruningStrategy } from "./config"
-import type { PluginState } from "./state"
+import type { Logger } from "../logger"
+import type { PruningStrategy } from "../config"
+import type { PluginState } from "../state"
 import { buildAnalysisPrompt } from "./prompt"
-import { selectModel, extractModelFromSession } from "./model-selector"
-import { estimateTokensBatch, formatTokenCount } from "./tokenizer"
-import { saveSessionState } from "./state-persistence"
-import { ensureSessionRestored } from "./state"
+import { selectModel, extractModelFromSession } from "../model-selector"
+import { estimateTokensBatch, formatTokenCount } from "../tokenizer"
+import { saveSessionState } from "../state/persistence"
+import { ensureSessionRestored } from "../state"
 import {
     sendPruningSummary,
     type NotificationContext
-} from "./notification"
+} from "../ui/notification"
 
 // ============================================================================
 // Types

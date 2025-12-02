@@ -1,10 +1,10 @@
 import type { PluginState } from "./state"
 import type { Logger } from "./logger"
-import type { JanitorContext } from "./janitor"
-import { runOnIdle } from "./janitor"
+import type { JanitorContext } from "./core/janitor"
+import { runOnIdle } from "./core/janitor"
 import type { PluginConfig, PruningStrategy } from "./config"
-import type { ToolTracker } from "./synth-instruction"
-import { resetToolTrackerCount } from "./synth-instruction"
+import type { ToolTracker } from "./api-formats/synth-instruction"
+import { resetToolTrackerCount } from "./api-formats/synth-instruction"
 
 export async function isSubagentSession(client: any, sessionID: string): Promise<boolean> {
     try {

@@ -8,8 +8,8 @@ import * as fs from "fs/promises";
 import { existsSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
-import type { SessionStats } from "./janitor";
-import type { Logger } from "./logger";
+import type { SessionStats } from "../core/janitor";
+import type { Logger } from "../logger";
 
 export interface PersistedSessionState {
     sessionName?: string;

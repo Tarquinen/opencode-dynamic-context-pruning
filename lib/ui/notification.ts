@@ -1,6 +1,6 @@
-import type { Logger } from "./logger"
-import type { SessionStats, PruningResult } from "./janitor"
-import { formatTokenCount } from "./tokenizer"
+import type { Logger } from "../logger"
+import type { SessionStats, PruningResult } from "../core/janitor"
+import { formatTokenCount } from "../tokenizer"
 import { extractParameterKey } from "./display-utils"
 
 export type PruningSummaryLevel = "off" | "minimal" | "detailed"

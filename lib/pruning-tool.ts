@@ -1,11 +1,11 @@
 import { tool } from "@opencode-ai/plugin"
-import type { JanitorContext } from "./janitor"
-import { runOnTool } from "./janitor"
-import { formatPruningResultForTool } from "./notification"
+import type { JanitorContext } from "./core/janitor"
+import { runOnTool } from "./core/janitor"
+import { formatPruningResultForTool } from "./ui/notification"
 import type { PluginConfig } from "./config"
-import type { ToolTracker } from "./synth-instruction"
-import { resetToolTrackerCount } from "./synth-instruction"
-import { loadPrompt } from "./prompt"
+import type { ToolTracker } from "./api-formats/synth-instruction"
+import { resetToolTrackerCount } from "./api-formats/synth-instruction"
+import { loadPrompt } from "./core/prompt"
 import { isSubagentSession } from "./hooks"
 
 /** Tool description for the prune tool, loaded from prompts/tool.txt */

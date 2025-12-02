@@ -1,6 +1,6 @@
 import { type PluginState, ensureSessionRestored } from "../state"
 import type { Logger } from "../logger"
-import type { ToolTracker } from "../synth-instruction"
+import type { ToolTracker } from "../api-formats/synth-instruction"
 import type { PluginConfig } from "../config"
 
 /** The message used to replace pruned tool output content */

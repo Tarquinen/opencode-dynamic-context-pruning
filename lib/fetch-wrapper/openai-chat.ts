@@ -5,8 +5,8 @@ import {
     fetchSessionMessages,
     getMostRecentActiveSession
 } from "./types"
-import { cacheToolParametersFromMessages } from "../tool-cache"
-import { injectNudge, injectSynth } from "../synth-instruction"
+import { cacheToolParametersFromMessages } from "../state/tool-cache"
+import { injectNudge, injectSynth } from "../api-formats/synth-instruction"
 
 /**
  * Handles OpenAI Chat Completions format (body.messages with role='tool').

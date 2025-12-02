@@ -1,14 +1,14 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { getConfig } from "./lib/config"
 import { Logger } from "./lib/logger"
-import { createJanitorContext } from "./lib/janitor"
+import { createJanitorContext } from "./lib/core/janitor"
 import { checkForUpdates } from "./lib/version-checker"
 import { createPluginState } from "./lib/state"
 import { installFetchWrapper } from "./lib/fetch-wrapper"
 import { createPruningTool } from "./lib/pruning-tool"
 import { createEventHandler, createChatParamsHandler } from "./lib/hooks"
-import { createToolTracker } from "./lib/synth-instruction"
-import { loadPrompt } from "./lib/prompt"
+import { createToolTracker } from "./lib/api-formats/synth-instruction"
+import { loadPrompt } from "./lib/core/prompt"
 
 const plugin: Plugin = (async (ctx) => {
     const { config, migrations } = getConfig(ctx)

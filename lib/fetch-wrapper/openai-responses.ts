@@ -5,8 +5,8 @@ import {
     fetchSessionMessages,
     getMostRecentActiveSession
 } from "./types"
-import { cacheToolParametersFromInput } from "../tool-cache"
-import { injectNudgeResponses, injectSynthResponses } from "../synth-instruction"
+import { cacheToolParametersFromInput } from "../state/tool-cache"
+import { injectNudgeResponses, injectSynthResponses } from "../api-formats/synth-instruction"
 
 /**
  * Handles OpenAI Responses API format (body.input array with function_call_output items).

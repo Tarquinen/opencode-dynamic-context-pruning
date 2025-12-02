@@ -1,4 +1,4 @@
-import { extractParameterKey } from "./display-utils"
+import { extractParameterKey } from "../ui/display-utils"
 
 export interface DuplicateDetectionResult {
     duplicateIds: string[]  // IDs to prune (older duplicates)

@@ -4,7 +4,7 @@ import {
     getAllPrunedIds,
     fetchSessionMessages
 } from "./types"
-import { injectNudgeGemini, injectSynthGemini } from "../synth-instruction"
+import { injectNudgeGemini, injectSynthGemini } from "../api-formats/synth-instruction"
 
 /**
  * Handles Google/Gemini format (body.contents array with functionResponse parts).

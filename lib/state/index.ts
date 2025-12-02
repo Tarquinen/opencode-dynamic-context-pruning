@@ -1,6 +1,6 @@
-import type { SessionStats } from "./janitor"
-import type { Logger } from "./logger"
-import { loadSessionState } from "./state-persistence"
+import type { SessionStats } from "../core/janitor"
+import type { Logger } from "../logger"
+import { loadSessionState } from "./persistence"
 
 /**
  * Centralized state management for the DCP plugin.
