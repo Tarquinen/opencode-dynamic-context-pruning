@@ -8,17 +8,19 @@ import { estimateTokensBatch, formatTokenCount } from "../tokenizer"
 import { saveSessionState } from "../state/persistence"
 import { ensureSessionRestored } from "../state"
 import {
-    sendPruningSummary,
+    sendUnifiedNotification,
     type NotificationContext
 } from "../ui/notification"
-
-// ============================================================================
-// Types
-// ============================================================================
 
 export interface SessionStats {
     totalToolsPruned: number
     totalTokensSaved: number
+    totalGCTokens: number
+}
+
+export interface GCStats {
+    tokensCollected: number
+    toolsDeduped: number
 }
 
 export interface PruningResult {
@@ -136,7 +138,11 @@ async function runWithStrategies(
         const alreadyPrunedIds = state.prunedIds.get(sessionID) ?? []
         const unprunedToolCallIds = toolCallIds.filter(id => !alreadyPrunedIds.includes(id))
 
-        if (unprunedToolCallIds.length === 0) {
+        // Get pending GC stats (accumulated since last notification)
+        const gcPending = state.gcPending.get(sessionID) ?? null
+
+        // If nothing to analyze and no GC activity, exit early
+        if (unprunedToolCallIds.length === 0 && !gcPending) {
             return null
         }
 
@@ -148,7 +154,7 @@ async function runWithStrategies(
         // PHASE 1: LLM ANALYSIS
         let llmPrunedIds: string[] = []
 
-        if (strategies.includes('ai-analysis')) {
+        if (strategies.includes('ai-analysis') && unprunedToolCallIds.length > 0) {
             llmPrunedIds = await runLlmAnalysis(
                 ctx,
                 sessionID,
@@ -161,33 +167,62 @@ async function runWithStrategies(
             )
         }
 
-        if (llmPrunedIds.length === 0) {
+        const finalNewlyPrunedIds = llmPrunedIds.filter(id => !alreadyPrunedIds.includes(id))
+
+        // If AI pruned nothing and no GC activity, nothing to report
+        if (finalNewlyPrunedIds.length === 0 && !gcPending) {
             return null
         }
-
-        const finalNewlyPrunedIds = llmPrunedIds.filter(id => !alreadyPrunedIds.includes(id))
 
         // PHASE 2: CALCULATE STATS & NOTIFICATION
         const tokensSaved = await calculateTokensSaved(finalNewlyPrunedIds, toolOutputs)
 
-        const currentStats = state.stats.get(sessionID) ?? { totalToolsPruned: 0, totalTokensSaved: 0 }
+        // Get current session stats, initializing with proper defaults
+        const currentStats = state.stats.get(sessionID) ?? {
+            totalToolsPruned: 0,
+            totalTokensSaved: 0,
+            totalGCTokens: 0
+        }
+
+        // Update session stats including GC contribution
         const sessionStats: SessionStats = {
             totalToolsPruned: currentStats.totalToolsPruned + finalNewlyPrunedIds.length,
-            totalTokensSaved: currentStats.totalTokensSaved + tokensSaved
+            totalTokensSaved: currentStats.totalTokensSaved + tokensSaved,
+            totalGCTokens: currentStats.totalGCTokens + (gcPending?.tokensCollected ?? 0)
         }
         state.stats.set(sessionID, sessionStats)
 
-        await sendPruningSummary(
+        // Send unified notification (handles all scenarios)
+        const notificationSent = await sendUnifiedNotification(
             ctx.notificationCtx,
             sessionID,
-            llmPrunedIds,
-            toolMetadata,
-            tokensSaved,
-            sessionStats,
+            {
+                aiPrunedCount: llmPrunedIds.length,
+                aiTokensSaved: tokensSaved,
+                aiPrunedIds: llmPrunedIds,
+                toolMetadata,
+                gcPending,
+                sessionStats
+            },
             currentAgent
         )
 
-        // PHASE 3: STATE UPDATE
+        // Clear pending GC stats after notification (whether sent or not - we've consumed them)
+        if (gcPending) {
+            state.gcPending.delete(sessionID)
+        }
+
+        // If we only had GC activity (no AI pruning), return null but notification was sent
+        if (finalNewlyPrunedIds.length === 0) {
+            if (notificationSent) {
+                logger.info("janitor", `GC-only notification: ~${formatTokenCount(gcPending?.tokensCollected ?? 0)} tokens from ${gcPending?.toolsDeduped ?? 0} deduped tools`, {
+                    trigger: options.trigger
+                })
+            }
+            return null
+        }
+
+        // PHASE 3: STATE UPDATE (only if AI pruned something)
         const allPrunedIds = [...new Set([...alreadyPrunedIds, ...llmPrunedIds])]
         state.prunedIds.set(sessionID, allPrunedIds)
 
@@ -202,6 +237,10 @@ async function runWithStrategies(
         const logMeta: Record<string, any> = { trigger: options.trigger }
         if (options.reason) {
             logMeta.reason = options.reason
+        }
+        if (gcPending) {
+            logMeta.gcTokens = gcPending.tokensCollected
+            logMeta.gcTools = gcPending.toolsDeduped
         }
 
         logger.info("janitor", `Pruned ${prunedCount}/${candidateCount} tools, ${keptCount} kept (~${formatTokenCount(tokensSaved)} tokens)`, logMeta)

@@ -7,6 +7,7 @@ import { handleOpenAIChatAndAnthropic } from "./openai-chat"
 import { handleGemini } from "./gemini"
 import { handleOpenAIResponses } from "./openai-responses"
 import { runStrategies } from "../core/strategies"
+import { accumulateGCStats } from "./gc-tracker"
 
 export type { FetchHandlerContext, FetchHandlerResult, SynthPrompts } from "./types"
 
@@ -96,6 +97,9 @@ export function installFetchWrapper(
                             // Normalize to lowercase to match janitor's ID normalization
                             const normalizedIds = result.prunedIds.map(id => id.toLowerCase())
                             state.prunedIds.set(sessionId, [...new Set([...alreadyPruned, ...normalizedIds])])
+
+                            // Track GC activity for the next notification
+                            accumulateGCStats(state, sessionId, result.prunedIds, body, logger)
                         }
                     }
                 }

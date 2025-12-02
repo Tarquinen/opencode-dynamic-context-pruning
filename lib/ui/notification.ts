@@ -1,5 +1,5 @@
 import type { Logger } from "../logger"
-import type { SessionStats, PruningResult } from "../core/janitor"
+import type { SessionStats, GCStats, PruningResult } from "../core/janitor"
 import { formatTokenCount } from "../tokenizer"
 import { extractParameterKey } from "./display-utils"
 
@@ -16,9 +16,14 @@ export interface NotificationContext {
     config: NotificationConfig
 }
 
-// ============================================================================
-// Core notification sending
-// ============================================================================
+export interface NotificationData {
+    aiPrunedCount: number
+    aiTokensSaved: number
+    aiPrunedIds: string[]
+    toolMetadata: Map<string, { tool: string, parameters?: any }>
+    gcPending: GCStats | null
+    sessionStats: SessionStats | null
+}
 
 export async function sendIgnoredMessage(
     ctx: NotificationContext,
@@ -44,101 +49,127 @@ export async function sendIgnoredMessage(
     }
 }
 
-// ============================================================================
-// Pruning notifications
-// ============================================================================
-
-export async function sendPruningSummary(
+export async function sendUnifiedNotification(
     ctx: NotificationContext,
     sessionID: string,
-    llmPrunedIds: string[],
-    toolMetadata: Map<string, { tool: string, parameters?: any }>,
-    tokensSaved: number,
-    sessionStats: SessionStats,
+    data: NotificationData,
     agent?: string
-): Promise<void> {
-    const totalPruned = llmPrunedIds.length
-    if (totalPruned === 0) return
-    if (ctx.config.pruningSummary === 'off') return
+): Promise<boolean> {
+    const hasAiPruning = data.aiPrunedCount > 0
+    const hasGcActivity = data.gcPending && data.gcPending.toolsDeduped > 0
 
-    if (ctx.config.pruningSummary === 'minimal') {
-        await sendMinimalSummary(ctx, sessionID, totalPruned, tokensSaved, sessionStats, agent)
-        return
+    if (!hasAiPruning && !hasGcActivity) {
+        return false
     }
 
-    await sendDetailedSummary(ctx, sessionID, llmPrunedIds, toolMetadata, tokensSaved, sessionStats, agent)
-}
-
-async function sendMinimalSummary(
-    ctx: NotificationContext,
-    sessionID: string,
-    totalPruned: number,
-    tokensSaved: number,
-    sessionStats: SessionStats,
-    agent?: string
-): Promise<void> {
-    if (totalPruned === 0) return
-
-    const tokensFormatted = formatTokenCount(tokensSaved)
-    const toolText = totalPruned === 1 ? 'tool' : 'tools'
-
-    let message = `🧹 DCP: Saved ~${tokensFormatted} tokens (${totalPruned} ${toolText} pruned)`
-
-    if (sessionStats.totalToolsPruned > totalPruned) {
-        message += ` │ Session: ~${formatTokenCount(sessionStats.totalTokensSaved)} tokens, ${sessionStats.totalToolsPruned} tools`
+    if (ctx.config.pruningSummary === 'off') {
+        return false
     }
+
+    const message = ctx.config.pruningSummary === 'minimal'
+        ? buildMinimalMessage(data)
+        : buildDetailedMessage(data, ctx.config.workingDirectory)
 
     await sendIgnoredMessage(ctx, sessionID, message, agent)
+    return true
 }
 
-async function sendDetailedSummary(
-    ctx: NotificationContext,
-    sessionID: string,
-    llmPrunedIds: string[],
-    toolMetadata: Map<string, { tool: string, parameters?: any }>,
-    tokensSaved: number,
-    sessionStats: SessionStats,
-    agent?: string
-): Promise<void> {
-    const totalPruned = llmPrunedIds.length
-    const tokensFormatted = formatTokenCount(tokensSaved)
+function buildMinimalMessage(data: NotificationData): string {
+    const hasAiPruning = data.aiPrunedCount > 0
+    const hasGcActivity = data.gcPending && data.gcPending.toolsDeduped > 0
 
-    let message = `🧹 DCP: Saved ~${tokensFormatted} tokens (${totalPruned} tool${totalPruned > 1 ? 's' : ''} pruned)`
+    if (hasAiPruning) {
+        const tokensSaved = formatTokenCount(data.aiTokensSaved)
+        const toolText = data.aiPrunedCount === 1 ? 'tool' : 'tools'
 
-    if (sessionStats.totalToolsPruned > totalPruned) {
-        message += ` │ Session: ~${formatTokenCount(sessionStats.totalTokensSaved)} tokens, ${sessionStats.totalToolsPruned} tools`
+        let cycleStats = `${data.aiPrunedCount} ${toolText}`
+        if (hasGcActivity) {
+            cycleStats += `, ♻️ ~${formatTokenCount(data.gcPending!.tokensCollected)}`
+        }
+
+        let message = `🧹 DCP: ~${tokensSaved} saved (${cycleStats})`
+        message += buildSessionSuffix(data.sessionStats, data.aiPrunedCount)
+
+        return message
+    } else {
+        const tokensCollected = formatTokenCount(data.gcPending!.tokensCollected)
+
+        let message = `♻️ DCP: ~${tokensCollected} collected`
+        message += buildSessionSuffix(data.sessionStats, 0)
+
+        return message
     }
-    message += '\n'
+}
 
-    message += `\n🤖 LLM analysis (${llmPrunedIds.length}):\n`
-    const toolsSummary = buildToolsSummary(llmPrunedIds, toolMetadata, ctx.config.workingDirectory)
+function buildDetailedMessage(data: NotificationData, workingDirectory?: string): string {
+    const hasAiPruning = data.aiPrunedCount > 0
+    const hasGcActivity = data.gcPending && data.gcPending.toolsDeduped > 0
 
-    for (const [toolName, params] of toolsSummary.entries()) {
-        if (params.length > 0) {
-            message += `  ${toolName} (${params.length}):\n`
-            for (const param of params) {
-                message += `    ${param}\n`
+    let message: string
+
+    if (hasAiPruning) {
+        const tokensSaved = formatTokenCount(data.aiTokensSaved)
+        const toolText = data.aiPrunedCount === 1 ? 'tool' : 'tools'
+
+        let cycleStats = `${data.aiPrunedCount} ${toolText}`
+        if (hasGcActivity) {
+            cycleStats += `, ♻️ ~${formatTokenCount(data.gcPending!.tokensCollected)}`
+        }
+
+        message = `🧹 DCP: ~${tokensSaved} saved (${cycleStats})`
+        message += buildSessionSuffix(data.sessionStats, data.aiPrunedCount)
+        message += '\n'
+
+        message += `\n🤖 LLM analysis (${data.aiPrunedIds.length}):\n`
+        const toolsSummary = buildToolsSummary(data.aiPrunedIds, data.toolMetadata, workingDirectory)
+
+        for (const [toolName, params] of toolsSummary.entries()) {
+            if (params.length > 0) {
+                message += `  ${toolName} (${params.length}):\n`
+                for (const param of params) {
+                    message += `    ${param}\n`
+                }
             }
         }
+
+        const foundToolNames = new Set(toolsSummary.keys())
+        const missingTools = data.aiPrunedIds.filter(id => {
+            const normalizedId = id.toLowerCase()
+            const metadata = data.toolMetadata.get(normalizedId)
+            return !metadata || !foundToolNames.has(metadata.tool)
+        })
+
+        if (missingTools.length > 0) {
+            message += `  (${missingTools.length} tool${missingTools.length > 1 ? 's' : ''} with unknown metadata)\n`
+        }
+    } else {
+        const tokensCollected = formatTokenCount(data.gcPending!.tokensCollected)
+
+        message = `♻️ DCP: ~${tokensCollected} collected`
+        message += buildSessionSuffix(data.sessionStats, 0)
     }
 
-    const foundToolNames = new Set(toolsSummary.keys())
-    const missingTools = llmPrunedIds.filter(id => {
-        const normalizedId = id.toLowerCase()
-        const metadata = toolMetadata.get(normalizedId)
-        return !metadata || !foundToolNames.has(metadata.tool)
-    })
-
-    if (missingTools.length > 0) {
-        message += `  (${missingTools.length} tool${missingTools.length > 1 ? 's' : ''} with unknown metadata)\n`
-    }
-
-    await sendIgnoredMessage(ctx, sessionID, message.trim(), agent)
+    return message.trim()
 }
 
-// ============================================================================
-// Formatting for tool output
-// ============================================================================
+function buildSessionSuffix(sessionStats: SessionStats | null, currentAiPruned: number): string {
+    if (!sessionStats) {
+        return ''
+    }
+
+    if (sessionStats.totalToolsPruned <= currentAiPruned) {
+        return ''
+    }
+
+    let suffix = ` │ Session: ~${formatTokenCount(sessionStats.totalTokensSaved)} (${sessionStats.totalToolsPruned} tools`
+
+    if (sessionStats.totalGCTokens > 0) {
+        suffix += `, ♻️ ~${formatTokenCount(sessionStats.totalGCTokens)}`
+    }
+
+    suffix += ')'
+    return suffix
+}
 
 export function formatPruningResultForTool(
     result: PruningResult,
@@ -156,12 +187,6 @@ export function formatPruningResultForTool(
 
     return lines.join('\n').trim()
 }
-
-// ============================================================================
-// Summary building helpers
-// Groups pruned tool IDs by tool name with their key parameter (file path, command, etc.)
-// for human-readable display: e.g. "read (3): foo.ts, bar.ts, baz.ts"
-// ============================================================================
 
 export function buildToolsSummary(
     prunedIds: string[],
@@ -211,10 +236,6 @@ export function formatToolSummaryLines(
 
     return lines
 }
-
-// ============================================================================
-// Path utilities
-// ============================================================================
 
 function truncate(str: string, maxLen: number = 60): string {
     if (str.length <= maxLen) return str
