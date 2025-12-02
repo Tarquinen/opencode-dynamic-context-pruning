@@ -81,7 +81,7 @@ export function installFetchWrapper(
 
                 // Run deduplication after handlers have populated toolParameters cache
                 const sessionId = state.lastSeenSessionId
-                if (sessionId && state.toolParameters.size > 0) {
+                if (sessionId && state.toolParameters.size > 1) {
                     const toolIds = Array.from(state.toolParameters.keys())
                     const alreadyPruned = state.prunedIds.get(sessionId) ?? []
                     const alreadyPrunedLower = new Set(alreadyPruned.map(id => id.toLowerCase()))
