@@ -112,12 +112,12 @@ function createDefaultConfig(): void {
   "showModelErrorToasts": true,
   // Only run AI analysis with session model or configured model (disables fallback models)
   "strictModelSelection": false,
-  // Pruning strategies: "deduplication", "ai-analysis" (empty array = disabled)
+  // AI analysis strategies (deduplication runs automatically on every request)
   "strategies": {
     // Strategies to run when session goes idle
-    "onIdle": ["deduplication", "ai-analysis"],
+    "onIdle": ["ai-analysis"],
     // Strategies to run when AI calls prune tool
-    "onTool": ["deduplication", "ai-analysis"]
+    "onTool": ["ai-analysis"]
   },
   // Summary display: "off", "minimal", or "detailed"
   "pruning_summary": "detailed",

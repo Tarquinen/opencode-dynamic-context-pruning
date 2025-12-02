@@ -21,13 +21,13 @@ When a new version is available, DCP will show a toast notification. Update by c
 
 Restart OpenCode. The plugin will automatically start optimizing your sessions.
 
-## Pruning Strategies
+## How Pruning Works
 
-DCP implements two complementary strategies:
+DCP uses two complementary techniques:
 
-**Deduplication** — Fast, zero-cost pruning that identifies repeated tool calls (e.g., reading the same file multiple times) and keeps only the most recent output. Runs instantly with no LLM calls.
+**Automatic Deduplication** — Silently identifies repeated tool calls (e.g., reading the same file multiple times) and keeps only the most recent output. Runs on every request with zero LLM cost.
 
-**AI Analysis** — Uses a language model to semantically analyze conversation context and identify tool outputs that are no longer relevant to the current task. More thorough but incurs LLM cost.
+**AI Analysis** — Uses a language model to semantically analyze conversation context and identify tool outputs that are no longer relevant to the current task. More thorough but incurs LLM cost. Configurable via `strategies`.
 
 ## Context Pruning Tool
 
@@ -61,17 +61,17 @@ DCP uses its own config file (`~/.config/opencode/dcp.jsonc` or `.opencode/dcp.j
 | `pruning_summary` | `"detailed"` | `"off"`, `"minimal"`, or `"detailed"` |
 | `nudge_freq` | `10` | How often to remind AI to prune (lower = more frequent) |
 | `protectedTools` | `["task", "todowrite", "todoread", "prune"]` | Tools that are never pruned |
-| `strategies.onIdle` | `["deduplication", "ai-analysis"]` | Strategies for automatic pruning |
-| `strategies.onTool` | `["deduplication", "ai-analysis"]` | Strategies when AI calls `prune` |
+| `strategies.onIdle` | `["ai-analysis"]` | Strategies for automatic pruning |
+| `strategies.onTool` | `["ai-analysis"]` | Strategies when AI calls `prune` |
 
-**Strategies:** `"deduplication"` (fast, zero LLM cost) and `"ai-analysis"` (maximum savings). Empty array disables that trigger.
+**Strategies:** `"ai-analysis"` uses LLM to identify prunable outputs. Empty array disables that trigger. Deduplication runs automatically on every request.
 
 ```jsonc
 {
   "enabled": true,
   "strategies": {
-    "onIdle": ["deduplication", "ai-analysis"],
-    "onTool": ["deduplication", "ai-analysis"]
+    "onIdle": ["ai-analysis"],
+    "onTool": ["ai-analysis"]
   },
   "protectedTools": ["task", "todowrite", "todoread", "prune"]
 }
