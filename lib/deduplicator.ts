@@ -18,9 +18,10 @@ export function detectDuplicates(
 ): DuplicateDetectionResult {
     const signatureMap = new Map<string, string[]>()
 
+    const protectedToolsLower = protectedTools.map(t => t.toLowerCase())
     const deduplicatableIds = unprunedToolCallIds.filter(id => {
         const metadata = toolMetadata.get(id)
-        return !metadata || !protectedTools.includes(metadata.tool)
+        return !metadata || !protectedToolsLower.includes(metadata.tool.toLowerCase())
     })
 
     for (const id of deduplicatableIds) {

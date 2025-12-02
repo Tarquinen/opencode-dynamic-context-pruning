@@ -28,6 +28,8 @@ export interface FetchHandlerResult {
     modified: boolean
     /** The potentially modified body object */
     body: any
+    /** Tool call IDs that were cached from this request (for session-scoped deduplication) */
+    cachedToolIds?: string[]
 }
 
 /** Session data returned from getAllPrunedIds */

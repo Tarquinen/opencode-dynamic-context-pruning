@@ -53,6 +53,8 @@ export function installFetchWrapper(
                 const body = JSON.parse(init.body)
                 const inputUrl = typeof input === 'string' ? input : 'URL object'
                 let modified = false
+                // Track tool IDs cached from this request for session-scoped deduplication
+                const cachedToolIds: string[] = []
 
                 // Try each format handler in order
                 // OpenAI Chat Completions & Anthropic style (body.messages)
@@ -60,6 +62,9 @@ export function installFetchWrapper(
                     const result = await handleOpenAIChatAndAnthropic(body, ctx, inputUrl)
                     if (result.modified) {
                         modified = true
+                    }
+                    if (result.cachedToolIds) {
+                        cachedToolIds.push(...result.cachedToolIds)
                     }
                 }
 
@@ -77,15 +82,17 @@ export function installFetchWrapper(
                     if (result.modified) {
                         modified = true
                     }
+                    if (result.cachedToolIds) {
+                        cachedToolIds.push(...result.cachedToolIds)
+                    }
                 }
 
-                // Run deduplication after handlers have populated toolParameters cache
+                // Run deduplication only on tool IDs from the current request (session-scoped)
                 const sessionId = state.lastSeenSessionId
-                if (sessionId && state.toolParameters.size > 0) {
-                    const toolIds = Array.from(state.toolParameters.keys())
+                if (sessionId && cachedToolIds.length > 1) {
                     const alreadyPruned = state.prunedIds.get(sessionId) ?? []
                     const alreadyPrunedLower = new Set(alreadyPruned.map(id => id.toLowerCase()))
-                    const unpruned = toolIds.filter(id => !alreadyPrunedLower.has(id.toLowerCase()))
+                    const unpruned = cachedToolIds.filter(id => !alreadyPrunedLower.has(id.toLowerCase()))
                     if (unpruned.length > 1) {
                         const { duplicateIds } = detectDuplicates(state.toolParameters, unpruned, config.protectedTools)
                         if (duplicateIds.length > 0) {

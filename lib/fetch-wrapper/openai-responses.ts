@@ -21,8 +21,8 @@ export async function handleOpenAIResponses(
         return { modified: false, body }
     }
 
-    // Cache tool parameters from input
-    cacheToolParametersFromInput(body.input, ctx.state)
+    // Cache tool parameters from input and track which IDs were cached
+    const cachedToolIds = cacheToolParametersFromInput(body.input, ctx.state)
 
     let modified = false
 
@@ -52,13 +52,13 @@ export async function handleOpenAIResponses(
     const functionOutputs = body.input.filter((item: any) => item.type === 'function_call_output')
 
     if (functionOutputs.length === 0) {
-        return { modified, body }
+        return { modified, body, cachedToolIds }
     }
 
     const { allSessions, allPrunedIds } = await getAllPrunedIds(ctx.client, ctx.state, ctx.logger)
 
     if (allPrunedIds.size === 0) {
-        return { modified, body }
+        return { modified, body, cachedToolIds }
     }
 
     let replacedCount = 0
@@ -99,8 +99,8 @@ export async function handleOpenAIResponses(
             )
         }
 
-        return { modified: true, body }
+        return { modified: true, body, cachedToolIds }
     }
 
-    return { modified, body }
+    return { modified, body, cachedToolIds }
 }

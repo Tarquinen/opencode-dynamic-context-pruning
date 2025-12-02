@@ -21,8 +21,8 @@ export async function handleOpenAIChatAndAnthropic(
         return { modified: false, body }
     }
 
-    // Cache tool parameters from messages
-    cacheToolParametersFromMessages(body.messages, ctx.state)
+    // Cache tool parameters from messages and track which IDs were cached
+    const cachedToolIds = cacheToolParametersFromMessages(body.messages, ctx.state)
 
     let modified = false
 
@@ -64,7 +64,7 @@ export async function handleOpenAIChatAndAnthropic(
     const { allSessions, allPrunedIds } = await getAllPrunedIds(ctx.client, ctx.state, ctx.logger)
 
     if (toolMessages.length === 0 || allPrunedIds.size === 0) {
-        return { modified, body }
+        return { modified, body, cachedToolIds }
     }
 
     let replacedCount = 0
@@ -125,8 +125,8 @@ export async function handleOpenAIChatAndAnthropic(
             )
         }
 
-        return { modified: true, body }
+        return { modified: true, body, cachedToolIds }
     }
 
-    return { modified, body }
+    return { modified, body, cachedToolIds }
 }
