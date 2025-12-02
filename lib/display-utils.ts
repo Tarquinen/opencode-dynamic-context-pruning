@@ -64,9 +64,6 @@ export function extractParameterKey(metadata: { tool: string, parameters?: any }
     if (tool === "task" && parameters.description) {
         return parameters.description
     }
-    if (tool === "batch") {
-        return `${parameters.tool_calls?.length || 0} parallel tools`
-    }
 
     const paramStr = JSON.stringify(parameters)
     if (paramStr === '{}' || paramStr === '[]' || paramStr === 'null') {
