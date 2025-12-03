@@ -84,11 +84,8 @@ function calculateStats(data: NotificationData): {
     justNowTokens: number
     totalTokens: number
 } {
-    // "Just now" = AI pruning + pending GC from this notification cycle
     const justNowTokens = data.aiTokensSaved + (data.gcPending?.tokensCollected ?? 0)
 
-    // Session stats are updated BEFORE notification is sent, so they already include
-    // the current cycle's values (totalTokensSaved includes current cycle, totalGCTokens includes current cycle)
     const totalTokens = data.sessionStats
         ? data.sessionStats.totalTokensSaved + data.sessionStats.totalGCTokens
         : justNowTokens
@@ -100,11 +97,9 @@ function formatStatsHeader(
     totalTokens: number,
     justNowTokens: number
 ): string {
-    // Format token counts (formatTokenCount already includes "tokens" suffix)
     const totalTokensStr = `~${formatTokenCount(totalTokens)}`
     const justNowTokensStr = `~${formatTokenCount(justNowTokens)}`
 
-    // Pad token strings to align columns
     const maxTokenLen = Math.max(totalTokensStr.length, justNowTokensStr.length)
     const totalTokensPadded = totalTokensStr.padStart(maxTokenLen)
     const justNowTokensPadded = justNowTokensStr.padStart(maxTokenLen)
@@ -121,14 +116,13 @@ function buildDetailedMessage(data: NotificationData, workingDirectory?: string)
 
     let message = formatStatsHeader(totalTokens, justNowTokens)
 
-    // Add tool breakdown if there was AI pruning
     if (data.aiPrunedCount > 0) {
         message += '\n\n▣ Pruned tools:'
-        
+
         for (const prunedId of data.aiPrunedIds) {
             const normalizedId = prunedId.toLowerCase()
             const metadata = data.toolMetadata.get(normalizedId)
-            
+
             if (metadata) {
                 const paramKey = extractParameterKey(metadata)
                 if (paramKey) {
@@ -140,7 +134,7 @@ function buildDetailedMessage(data: NotificationData, workingDirectory?: string)
             }
         }
 
-        const knownCount = data.aiPrunedIds.filter(id => 
+        const knownCount = data.aiPrunedIds.filter(id =>
             data.toolMetadata.has(id.toLowerCase())
         ).length
         const unknownCount = data.aiPrunedIds.length - knownCount
