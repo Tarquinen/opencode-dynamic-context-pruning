@@ -51,7 +51,8 @@ export async function handleOpenAIResponses(
 
             if (prunableList) {
                 // Track new tool results and check if nudge threshold is met
-                trackNewToolResultsResponses(body.input, ctx.toolTracker)
+                const protectedSet = new Set(ctx.config.protectedTools)
+                trackNewToolResultsResponses(body.input, ctx.toolTracker, protectedSet)
                 const includeNudge = ctx.config.nudge_freq > 0 && ctx.toolTracker.toolResultCount > ctx.config.nudge_freq
 
                 const endInjection = buildEndInjection(prunableList, includeNudge)
@@ -80,6 +81,16 @@ export async function handleOpenAIResponses(
         return { modified, body }
     }
 
+    // Count only prunable (non-protected) function outputs for the total
+    const protectedToolsLower = new Set(ctx.config.protectedTools.map(t => t.toLowerCase()))
+    let prunableFunctionOutputCount = 0
+    for (const item of functionOutputs) {
+        const toolName = item.name?.toLowerCase()
+        if (!toolName || !protectedToolsLower.has(toolName)) {
+            prunableFunctionOutputCount++
+        }
+    }
+
     let replacedCount = 0
 
     body.input = body.input.map((item: any) => {
@@ -96,7 +107,7 @@ export async function handleOpenAIResponses(
     if (replacedCount > 0) {
         ctx.logger.info("fetch", "Replaced pruned tool outputs (Responses API)", {
             replaced: replacedCount,
-            total: functionOutputs.length
+            total: prunableFunctionOutputCount
         })
 
         if (ctx.logger.enabled) {

@@ -92,6 +92,22 @@ export function hasMapping(sessionId: string): boolean {
 }
 
 /**
+ * Clears all ID mappings for a specific session.
+ * Call this when a session ends or when switching to a new session.
+ */
+export function clearSessionMapping(sessionId: string): void {
+    sessionMappings.delete(sessionId)
+}
+
+/**
+ * Clears all session mappings.
+ * Call this when switching sessions to ensure clean state.
+ */
+export function clearAllMappings(): void {
+    sessionMappings.clear()
+}
+
+/**
  * Gets the next numeric ID that will be assigned (without assigning it).
  * Useful for knowing the current state.
  */

@@ -5,6 +5,7 @@ import { runOnIdle } from "./core/janitor"
 import type { PluginConfig, PruningStrategy } from "./config"
 import type { ToolTracker } from "./api-formats/synth-instruction"
 import { resetToolTrackerCount } from "./api-formats/synth-instruction"
+import { clearAllMappings } from "./state/id-mapping"
 
 export async function isSubagentSession(client: any, sessionID: string): Promise<boolean> {
     try {
@@ -70,6 +71,18 @@ export function createChatParamsHandler(
 
         if (!providerID && input.message?.model?.providerID) {
             providerID = input.message.model.providerID
+        }
+
+        // Detect session change and reset per-session state
+        if (state.lastSeenSessionId && state.lastSeenSessionId !== sessionId) {
+            logger.info("chat.params", "Session changed, resetting state", {
+                from: state.lastSeenSessionId.substring(0, 8),
+                to: sessionId.substring(0, 8)
+            })
+            // Clear ID mappings from previous session
+            clearAllMappings()
+            // Clear tool parameters cache (not session-scoped, so must be cleared)
+            state.toolParameters.clear()
         }
 
         // Track the last seen session ID for fetch wrapper correlation

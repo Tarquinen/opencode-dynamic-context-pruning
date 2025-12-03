@@ -46,7 +46,8 @@ export async function handleGemini(
 
             if (prunableList) {
                 // Track new tool results and check if nudge threshold is met
-                trackNewToolResultsGemini(body.contents, ctx.toolTracker)
+                const protectedSet = new Set(ctx.config.protectedTools)
+                trackNewToolResultsGemini(body.contents, ctx.toolTracker, protectedSet)
                 const includeNudge = ctx.config.nudge_freq > 0 && ctx.toolTracker.toolResultCount > ctx.config.nudge_freq
 
                 const endInjection = buildEndInjection(prunableList, includeNudge)
@@ -99,6 +100,8 @@ export async function handleGemini(
     const toolPositionCounters = new Map<string, number>()
     let replacedCount = 0
     let totalFunctionResponses = 0
+    let prunableFunctionResponses = 0
+    const protectedToolsLower = new Set(ctx.config.protectedTools.map(t => t.toLowerCase()))
 
     body.contents = body.contents.map((content: any) => {
         if (!Array.isArray(content.parts)) return content
@@ -108,6 +111,11 @@ export async function handleGemini(
             if (part.functionResponse) {
                 totalFunctionResponses++
                 const funcName = part.functionResponse.name?.toLowerCase()
+
+                // Count as prunable if not a protected tool
+                if (!funcName || !protectedToolsLower.has(funcName)) {
+                    prunableFunctionResponses++
+                }
 
                 if (funcName) {
                     // Get current position for this tool name and increment counter
@@ -148,7 +156,7 @@ export async function handleGemini(
     if (replacedCount > 0) {
         ctx.logger.info("fetch", "Replaced pruned tool outputs (Google/Gemini)", {
             replaced: replacedCount,
-            total: totalFunctionResponses
+            total: prunableFunctionResponses
         })
 
         if (ctx.logger.enabled) {
