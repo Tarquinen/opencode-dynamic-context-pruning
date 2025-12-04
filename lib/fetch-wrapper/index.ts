@@ -3,7 +3,7 @@ import type { Logger } from "../logger"
 import type { FetchHandlerContext, SynthPrompts } from "./types"
 import type { ToolTracker } from "../api-formats/synth-instruction"
 import type { PluginConfig } from "../config"
-import { openaiChatFormat, openaiResponsesFormat, geminiFormat } from "./formats"
+import { openaiChatFormat, openaiResponsesFormat, geminiFormat, bedrockFormat } from "./formats"
 import { handleFormat } from "./handler"
 import { runStrategies } from "../core/strategies"
 import { accumulateGCStats } from "./gc-tracker"
@@ -15,11 +15,12 @@ export type { FetchHandlerContext, FetchHandlerResult, SynthPrompts } from "./ty
  * Creates a wrapped global fetch that intercepts API calls and performs
  * context pruning on tool outputs that have been marked for removal.
  * 
- * Supports four API formats:
+ * Supports five API formats:
  * 1. OpenAI Chat Completions (body.messages with role='tool')
  * 2. Anthropic (body.messages with role='user' containing tool_result)
  * 3. Google/Gemini (body.contents with functionResponse parts)
  * 4. OpenAI Responses API (body.input with function_call_output items)
+ * 5. AWS Bedrock Converse API (body.system + body.messages with toolResult blocks)
  */
 export function installFetchWrapper(
     state: PluginState,
@@ -57,8 +58,16 @@ export function installFetchWrapper(
                 const toolIdsBefore = new Set(state.toolParameters.keys())
 
                 // Mutually exclusive format handlers
+                // Note: bedrockFormat must be checked before openaiChatFormat since both have messages[]
+                // but Bedrock has distinguishing system[] array and inferenceConfig
                 if (openaiResponsesFormat.detect(body)) {
                     const result = await handleFormat(body, ctx, inputUrl, openaiResponsesFormat)
+                    if (result.modified) {
+                        modified = true
+                    }
+                }
+                else if (bedrockFormat.detect(body)) {
+                    const result = await handleFormat(body, ctx, inputUrl, bedrockFormat)
                     if (result.modified) {
                         modified = true
                     }

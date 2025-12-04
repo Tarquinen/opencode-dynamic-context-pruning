@@ -10,6 +10,8 @@ bun.lock
 
 # Documentation
 ANALYSIS.md
+docs/
+notes/
 
 # Source files (since we're shipping dist/)
 index.ts
