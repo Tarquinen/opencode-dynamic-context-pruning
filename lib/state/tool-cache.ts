@@ -10,7 +10,7 @@ const MAX_TOOL_CACHE_SIZE = 500
  * This is the single source of truth for tool parameters, replacing
  * format-specific parsing from LLM API requests.
  */
-export async function syncToolParametersFromOpenCode(
+export async function syncToolCache(
     client: any,
     sessionId: string,
     state: PluginState,

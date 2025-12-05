@@ -2,7 +2,7 @@ import type { FetchHandlerContext, FetchHandlerResult, FormatDescriptor, PrunedI
 import { type PluginState, ensureSessionRestored } from "../state"
 import type { Logger } from "../logger"
 import { buildPrunableToolsList, buildEndInjection } from "./prunable-list"
-import { syncToolParametersFromOpenCode } from "../state/tool-cache"
+import { syncToolCache } from "../state/tool-cache"
 
 const PRUNED_CONTENT_MESSAGE = '[Output removed to save context - information superseded or no longer needed]'
 
@@ -71,7 +71,7 @@ export async function handleFormat(
     const sessionId = ctx.state.lastSeenSessionId
     const protectedSet = new Set(ctx.config.protectedTools)
     if (sessionId) {
-        await syncToolParametersFromOpenCode(ctx.client, sessionId, ctx.state, ctx.toolTracker, protectedSet, ctx.logger)
+        await syncToolCache(ctx.client, sessionId, ctx.state, ctx.toolTracker, protectedSet, ctx.logger)
     }
 
     if (ctx.config.strategies.onTool.length > 0) {
