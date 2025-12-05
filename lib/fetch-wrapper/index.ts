@@ -1,7 +1,7 @@
 import type { PluginState } from "../state"
 import type { Logger } from "../logger"
 import type { FetchHandlerContext, SynthPrompts } from "./types"
-import type { ToolTracker } from "../api-formats/synth-instruction"
+import type { ToolTracker } from "./types"
 import type { PluginConfig } from "../config"
 import { openaiChatFormat, openaiResponsesFormat, geminiFormat, bedrockFormat } from "./formats"
 import { handleFormat } from "./handler"

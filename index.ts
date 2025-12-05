@@ -7,7 +7,7 @@ import { createPluginState } from "./lib/state"
 import { installFetchWrapper } from "./lib/fetch-wrapper"
 import { createPruningTool } from "./lib/pruning-tool"
 import { createEventHandler, createChatParamsHandler } from "./lib/hooks"
-import { createToolTracker } from "./lib/api-formats/synth-instruction"
+import { createToolTracker } from "./lib/fetch-wrapper/tool-tracker"
 import { loadPrompt } from "./lib/core/prompt"
 
 const plugin: Plugin = (async (ctx) => {

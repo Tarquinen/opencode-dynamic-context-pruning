@@ -4,10 +4,6 @@
  * Builds and injects a single message at the end of the conversation containing:
  * - Nudge instruction (when toolResultCount > nudge_freq)
  * - Prunable tools list
- * 
- * Note: The base synthetic instructions (signal_management, context_window_management,
- * context_pruning) are still appended to the last user message separately via
- * synth-instruction.ts - that behavior is unchanged.
  */
 
 import { extractParameterKey } from '../ui/display-utils'
@@ -105,55 +101,4 @@ export function buildEndInjection(
     parts.push(prunableList)
 
     return parts.join('\n\n')
-}
-
-// ============================================================================
-// OpenAI Chat / Anthropic Format
-// ============================================================================
-
-/**
- * Injects the prunable list (and optionally nudge) at the end of OpenAI/Anthropic messages.
- * Appends a new user message at the end.
- */
-export function injectPrunableList(
-    messages: any[],
-    injection: string
-): boolean {
-    if (!injection) return false
-    messages.push({ role: 'user', content: injection })
-    return true
-}
-
-// ============================================================================
-// Google/Gemini Format
-// ============================================================================
-
-/**
- * Injects the prunable list (and optionally nudge) at the end of Gemini contents.
- * Appends a new user content at the end.
- */
-export function injectPrunableListGemini(
-    contents: any[],
-    injection: string
-): boolean {
-    if (!injection) return false
-    contents.push({ role: 'user', parts: [{ text: injection }] })
-    return true
-}
-
-// ============================================================================
-// OpenAI Responses API Format
-// ============================================================================
-
-/**
- * Injects the prunable list (and optionally nudge) at the end of OpenAI Responses API input.
- * Appends a new user message at the end.
- */
-export function injectPrunableListResponses(
-    input: any[],
-    injection: string
-): boolean {
-    if (!injection) return false
-    input.push({ type: 'message', role: 'user', content: injection })
-    return true
 }

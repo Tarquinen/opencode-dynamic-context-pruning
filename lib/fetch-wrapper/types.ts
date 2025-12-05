@@ -1,10 +1,8 @@
-import { type PluginState, ensureSessionRestored } from "../state"
+import type { PluginState } from "../state"
 import type { Logger } from "../logger"
-import type { ToolTracker } from "../api-formats/synth-instruction"
 import type { PluginConfig } from "../config"
-
-/** The message used to replace pruned tool output content */
-export const PRUNED_CONTENT_MESSAGE = '[Output removed to save context - information superseded or no longer needed]'
+import type { ToolTracker } from "./tool-tracker"
+export type { ToolTracker } from "./tool-tracker"
 
 // ============================================================================
 // Format Descriptor Interface
@@ -85,57 +83,4 @@ export interface FetchHandlerResult {
 export interface PrunedIdData {
     allSessions: any
     allPrunedIds: Set<string>
-}
-
-export async function getAllPrunedIds(
-    client: any,
-    state: PluginState,
-    logger?: Logger
-): Promise<PrunedIdData> {
-    const allSessions = await client.session.list()
-    const allPrunedIds = new Set<string>()
-
-    const currentSession = getMostRecentActiveSession(allSessions)
-    if (currentSession) {
-        await ensureSessionRestored(state, currentSession.id, logger)
-        const prunedIds = state.prunedIds.get(currentSession.id) ?? []
-        prunedIds.forEach((id: string) => allPrunedIds.add(id.toLowerCase()))
-        
-        if (logger && prunedIds.length > 0) {
-            logger.debug("fetch", "Loaded pruned IDs for replacement", {
-                sessionId: currentSession.id,
-                prunedCount: prunedIds.length
-            })
-        }
-    }
-
-    return { allSessions, allPrunedIds }
-}
-
-/**
- * Fetch session messages for logging purposes.
- */
-export async function fetchSessionMessages(
-    client: any,
-    sessionId: string
-): Promise<any[] | undefined> {
-    try {
-        const messagesResponse = await client.session.messages({
-            path: { id: sessionId },
-            query: { limit: 100 }
-        })
-        return Array.isArray(messagesResponse.data)
-            ? messagesResponse.data
-            : Array.isArray(messagesResponse) ? messagesResponse : undefined
-    } catch (e) {
-        return undefined
-    }
-}
-
-/**
- * Get the most recent active (non-subagent) session.
- */
-export function getMostRecentActiveSession(allSessions: any): any | undefined {
-    const activeSessions = allSessions.data?.filter((s: any) => !s.parentID) || []
-    return activeSessions.length > 0 ? activeSessions[0] : undefined
 }
