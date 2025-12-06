@@ -71,3 +71,18 @@ export function extractParameterKey(metadata: { tool: string, parameters?: any }
     }
     return paramStr.substring(0, 50)
 }
+
+/**
+ * Finds the current agent from messages by looking for the most recent user message.
+ * Used by janitor and pruning-tool to determine notification context.
+ */
+export function findCurrentAgent(messages: any[]): string | undefined {
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i]
+        const info = msg.info
+        if (info?.role === 'user') {
+            return info.agent || 'build'
+        }
+    }
+    return undefined
+}

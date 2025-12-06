@@ -6,6 +6,7 @@ import { resetToolTrackerCount } from "./fetch-wrapper/tool-tracker"
 import { isSubagentSession } from "./hooks"
 import { getActualId } from "./state/id-mapping"
 import { formatPruningResultForTool, sendUnifiedNotification, type NotificationContext } from "./ui/notification"
+import { findCurrentAgent } from "./ui/display-utils"
 import { ensureSessionRestored } from "./state"
 import { saveSessionState } from "./state/persistence"
 import type { Logger } from "./logger"
@@ -136,19 +137,6 @@ export function createPruningTool(
     })
 }
 
-/**
- * Finds the current agent from messages (same logic as janitor.ts).
- */
-function findCurrentAgent(messages: any[]): string | undefined {
-    for (let i = messages.length - 1; i >= 0; i--) {
-        const msg = messages[i]
-        const info = msg.info
-        if (info?.role === 'user') {
-            return info.agent || 'build'
-        }
-    }
-    return undefined
-}
 
 /**
  * Calculates approximate tokens saved by pruning the given tool call IDs.

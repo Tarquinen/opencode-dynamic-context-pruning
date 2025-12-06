@@ -11,6 +11,7 @@ import {
     sendUnifiedNotification,
     type NotificationContext
 } from "../ui/notification"
+import { findCurrentAgent } from "../ui/display-utils"
 
 export interface SessionStats {
     totalToolsPruned: number
@@ -437,16 +438,7 @@ export function parseMessages(
     return { toolCallIds, toolOutputs, toolMetadata }
 }
 
-function findCurrentAgent(messages: any[]): string | undefined {
-    for (let i = messages.length - 1; i >= 0; i--) {
-        const msg = messages[i]
-        const info = msg.info
-        if (info?.role === 'user') {
-            return info.agent || 'build'
-        }
-    }
-    return undefined
-}
+
 
 // ============================================================================
 // Helpers
