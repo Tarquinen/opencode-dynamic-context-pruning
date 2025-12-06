@@ -160,6 +160,63 @@ export const geminiFormat: FormatDescriptor = {
         return replaced
     },
 
+    replaceToolInput(data: any[], toolId: string, prunedMessage: string, state: PluginState): boolean {
+        let positionMapping: Map<string, string> | undefined
+        for (const [_sessionId, mapping] of state.googleToolCallMapping) {
+            if (mapping && mapping.size > 0) {
+                positionMapping = mapping
+                break
+            }
+        }
+
+        if (!positionMapping) {
+            return false
+        }
+
+        const toolIdLower = toolId.toLowerCase()
+        const toolPositionCounters = new Map<string, number>()
+        let replaced = false
+
+        for (let i = 0; i < data.length; i++) {
+            const content = data[i]
+            if (!Array.isArray(content.parts)) continue
+
+            let contentModified = false
+            const newParts = content.parts.map((part: any) => {
+                // Gemini format: functionCall blocks in model content
+                if (part.functionCall) {
+                    const funcName = part.functionCall.name?.toLowerCase()
+                    if (funcName) {
+                        const currentIndex = toolPositionCounters.get(funcName) || 0
+                        toolPositionCounters.set(funcName, currentIndex + 1)
+
+                        const positionKey = `${funcName}:${currentIndex}`
+                        const mappedToolId = positionMapping!.get(positionKey)
+
+                        if (mappedToolId?.toLowerCase() === toolIdLower) {
+                            contentModified = true
+                            replaced = true
+                            return {
+                                ...part,
+                                functionCall: {
+                                    ...part.functionCall,
+                                    args: { _pruned: prunedMessage }
+                                }
+                            }
+                        }
+                    }
+                }
+                return part
+            })
+
+            if (contentModified) {
+                data[i] = { ...content, parts: newParts }
+            }
+        }
+
+        return replaced
+    },
+
     hasToolOutputs(data: any[]): boolean {
         return data.some((content: any) =>
             Array.isArray(content.parts) &&

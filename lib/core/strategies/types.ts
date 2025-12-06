@@ -6,6 +6,8 @@
 export interface ToolMetadata {
     tool: string
     parameters?: any
+    status?: "pending" | "running" | "completed" | "error"
+    error?: string
 }
 
 export interface StrategyResult {

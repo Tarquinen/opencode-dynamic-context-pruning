@@ -56,7 +56,7 @@ export async function sendUnifiedNotification(
     agent?: string
 ): Promise<boolean> {
     const hasAiPruning = data.aiPrunedCount > 0
-    const hasGcActivity = data.gcPending && data.gcPending.toolsDeduped > 0
+    const hasGcActivity = data.gcPending && data.gcPending.toolsGCd > 0
 
     if (!hasAiPruning && !hasGcActivity) {
         return false

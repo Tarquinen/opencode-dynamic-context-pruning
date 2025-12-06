@@ -27,6 +27,10 @@ Thumbs.db
 
 # OpenCode
 .opencode/
+AGENTS.md
+
+# Claude
+.claude/
 
 # Tests (local development only)
 tests/

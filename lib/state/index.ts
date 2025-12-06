@@ -6,6 +6,7 @@ export interface PluginState {
     prunedIds: Map<string, string[]>
     stats: Map<string, SessionStats>
     gcPending: Map<string, GCStats>
+    gcCountedIds: Set<string>  // Track which tools have already been counted for GC tokens
     toolParameters: Map<string, ToolParameterEntry>
     model: Map<string, ModelInfo>
     googleToolCallMapping: Map<string, Map<string, string>>
@@ -34,6 +35,7 @@ export function createPluginState(): PluginState {
         prunedIds: new Map(),
         stats: new Map(),
         gcPending: new Map(),
+        gcCountedIds: new Set(),
         toolParameters: new Map(),
         model: new Map(),
         googleToolCallMapping: new Map(),

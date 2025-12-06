@@ -117,6 +117,39 @@ export const bedrockFormat: FormatDescriptor = {
         return replaced
     },
 
+    replaceToolInput(data: any[], toolId: string, prunedMessage: string, _state: PluginState): boolean {
+        const toolIdLower = toolId.toLowerCase()
+        let replaced = false
+
+        for (let i = 0; i < data.length; i++) {
+            const m = data[i]
+
+            // Bedrock format: assistant message with toolUse blocks in content
+            if (m.role === 'assistant' && Array.isArray(m.content)) {
+                let messageModified = false
+                const newContent = m.content.map((block: any) => {
+                    if (block.toolUse && block.toolUse.toolUseId?.toLowerCase() === toolIdLower) {
+                        messageModified = true
+                        return {
+                            ...block,
+                            toolUse: {
+                                ...block.toolUse,
+                                input: { _pruned: prunedMessage }
+                            }
+                        }
+                    }
+                    return block
+                })
+                if (messageModified) {
+                    data[i] = { ...m, content: newContent }
+                    replaced = true
+                }
+            }
+        }
+
+        return replaced
+    },
+
     hasToolOutputs(data: any[]): boolean {
         for (const m of data) {
             if (m.role === 'user' && Array.isArray(m.content)) {

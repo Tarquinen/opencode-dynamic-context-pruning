@@ -11,6 +11,7 @@ import {
     sendUnifiedNotification,
     type NotificationContext
 } from "../ui/notification"
+import { findCurrentAgent } from "../ui/display-utils"
 
 export interface SessionStats {
     totalToolsPruned: number
@@ -21,7 +22,7 @@ export interface SessionStats {
 
 export interface GCStats {
     tokensCollected: number
-    toolsDeduped: number
+    toolsGCd: number  // Tools garbage collected (deduped outputs + error-pruned inputs)
 }
 
 export interface PruningResult {
@@ -181,7 +182,7 @@ async function runWithStrategies(
             totalToolsPruned: currentStats.totalToolsPruned + finalNewlyPrunedIds.length,
             totalTokensSaved: currentStats.totalTokensSaved + tokensSaved,
             totalGCTokens: currentStats.totalGCTokens + (gcPending?.tokensCollected ?? 0),
-            totalGCTools: currentStats.totalGCTools + (gcPending?.toolsDeduped ?? 0)
+            totalGCTools: currentStats.totalGCTools + (gcPending?.toolsGCd ?? 0)
         }
         state.stats.set(sessionID, sessionStats)
 
@@ -205,7 +206,7 @@ async function runWithStrategies(
 
         if (finalNewlyPrunedIds.length === 0) {
             if (notificationSent) {
-                logger.info("janitor", `GC-only notification: ~${formatTokenCount(gcPending?.tokensCollected ?? 0)} tokens from ${gcPending?.toolsDeduped ?? 0} deduped tools`, {
+                logger.info("janitor", `GC-only notification: ~${formatTokenCount(gcPending?.tokensCollected ?? 0)} tokens from ${gcPending?.toolsGCd ?? 0} GC'd tools`, {
                     trigger: options.trigger
                 })
             }
@@ -230,7 +231,7 @@ async function runWithStrategies(
         }
         if (gcPending) {
             logMeta.gcTokens = gcPending.tokensCollected
-            logMeta.gcTools = gcPending.toolsDeduped
+            logMeta.gcTools = gcPending.toolsGCd
         }
 
         logger.info("janitor", `Pruned ${prunedCount}/${candidateCount} tools, ${keptCount} kept (~${formatTokenCount(tokensSaved)} tokens)`, logMeta)
@@ -437,16 +438,7 @@ export function parseMessages(
     return { toolCallIds, toolOutputs, toolMetadata }
 }
 
-function findCurrentAgent(messages: any[]): string | undefined {
-    for (let i = messages.length - 1; i >= 0; i--) {
-        const msg = messages[i]
-        const info = msg.info
-        if (info?.role === 'user') {
-            return info.agent || 'build'
-        }
-    }
-    return undefined
-}
+
 
 // ============================================================================
 // Helpers

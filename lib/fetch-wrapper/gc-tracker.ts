@@ -10,19 +10,77 @@ export function accumulateGCStats(
 ): void {
     if (prunedIds.length === 0) return
 
-    const toolOutputs = extractToolOutputsFromBody(body, prunedIds)
+    // Filter out IDs that have already been counted
+    const newIds = prunedIds.filter(id => !state.gcCountedIds.has(id.toLowerCase()))
+    if (newIds.length === 0) return
+
+    const toolOutputs = extractToolOutputsFromBody(body, newIds)
     const tokensCollected = estimateTokensFromOutputs(toolOutputs)
 
-    const existing = state.gcPending.get(sessionId) ?? { tokensCollected: 0, toolsDeduped: 0 }
+    const existing = state.gcPending.get(sessionId) ?? { tokensCollected: 0, toolsGCd: 0 }
 
     state.gcPending.set(sessionId, {
         tokensCollected: existing.tokensCollected + tokensCollected,
-        toolsDeduped: existing.toolsDeduped + prunedIds.length
+        toolsGCd: existing.toolsGCd + newIds.length
     })
 
-    logger.debug("gc-tracker", "Accumulated GC stats", {
+    // Mark these IDs as counted
+    for (const id of newIds) {
+        state.gcCountedIds.add(id.toLowerCase())
+    }
+
+    logger.debug("gc-tracker", "Accumulated GC stats (outputs)", {
         sessionId: sessionId.substring(0, 8),
-        newlyDeduped: prunedIds.length,
+        outputsDeduped: newIds.length,
+        tokensThisCycle: tokensCollected,
+        pendingTotal: state.gcPending.get(sessionId)
+    })
+}
+
+/**
+ * Accumulate GC stats for pruned tool inputs.
+ * Uses state.toolParameters (from OpenCode API) instead of parsing LLM request body.
+ */
+export function accumulateGCInputStats(
+    state: PluginState,
+    sessionId: string,
+    prunedIds: string[],
+    logger: Logger
+): void {
+    if (prunedIds.length === 0) return
+
+    // Filter out IDs that have already been counted
+    const newIds = prunedIds.filter(id => !state.gcCountedIds.has(id.toLowerCase()))
+    if (newIds.length === 0) return
+
+    // Get input sizes from state.toolParameters (populated from OpenCode API)
+    let totalChars = 0
+    for (const id of newIds) {
+        const entry = state.toolParameters.get(id.toLowerCase())
+        if (entry?.parameters) {
+            const paramStr = typeof entry.parameters === 'string'
+                ? entry.parameters
+                : JSON.stringify(entry.parameters)
+            totalChars += paramStr.length
+        }
+    }
+    const tokensCollected = Math.round(totalChars / 4)
+
+    const existing = state.gcPending.get(sessionId) ?? { tokensCollected: 0, toolsGCd: 0 }
+
+    state.gcPending.set(sessionId, {
+        tokensCollected: existing.tokensCollected + tokensCollected,
+        toolsGCd: existing.toolsGCd + newIds.length
+    })
+
+    // Mark these IDs as counted
+    for (const id of newIds) {
+        state.gcCountedIds.add(id.toLowerCase())
+    }
+
+    logger.debug("gc-tracker", "Accumulated GC stats (inputs)", {
+        sessionId: sessionId.substring(0, 8),
+        inputsPruned: newIds.length,
         tokensThisCycle: tokensCollected,
         pendingTotal: state.gcPending.get(sessionId)
     })

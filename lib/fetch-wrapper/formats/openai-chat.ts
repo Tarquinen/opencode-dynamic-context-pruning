@@ -114,6 +114,55 @@ export const openaiChatFormat: FormatDescriptor = {
         return replaced
     },
 
+    replaceToolInput(data: any[], toolId: string, prunedMessage: string, _state: PluginState): boolean {
+        const toolIdLower = toolId.toLowerCase()
+        let replaced = false
+
+        for (let i = 0; i < data.length; i++) {
+            const m = data[i]
+
+            // OpenAI Chat format: assistant message with tool_calls array
+            if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
+                let messageModified = false
+                const newToolCalls = m.tool_calls.map((tc: any) => {
+                    if (tc.id?.toLowerCase() === toolIdLower) {
+                        messageModified = true
+                        return {
+                            ...tc,
+                            function: {
+                                ...tc.function,
+                                arguments: JSON.stringify({ _pruned: prunedMessage })
+                            }
+                        }
+                    }
+                    return tc
+                })
+                if (messageModified) {
+                    data[i] = { ...m, tool_calls: newToolCalls }
+                    replaced = true
+                }
+            }
+
+            // Anthropic format (via OpenAI Chat): tool_use blocks in assistant content
+            if (m.role === 'assistant' && Array.isArray(m.content)) {
+                let messageModified = false
+                const newContent = m.content.map((part: any) => {
+                    if (part.type === 'tool_use' && part.id?.toLowerCase() === toolIdLower) {
+                        messageModified = true
+                        return { ...part, input: { _pruned: prunedMessage } }
+                    }
+                    return part
+                })
+                if (messageModified) {
+                    data[i] = { ...m, content: newContent }
+                    replaced = true
+                }
+            }
+        }
+
+        return replaced
+    },
+
     hasToolOutputs(data: any[]): boolean {
         for (const m of data) {
             if (m.role === 'tool') return true

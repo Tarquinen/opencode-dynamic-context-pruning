@@ -4,14 +4,15 @@
 
 import type { PruningStrategy, StrategyResult, ToolMetadata } from "./types"
 import { deduplicationStrategy } from "./deduplication"
+import { errorPruningStrategy } from "./error-pruning"
 
 export type { PruningStrategy, StrategyResult, ToolMetadata, StrategyDetail } from "./types"
 
 /** All available strategies */
 const ALL_STRATEGIES: PruningStrategy[] = [
     deduplicationStrategy,
+    errorPruningStrategy,
     // Future strategies will be added here:
-    // errorPruningStrategy,
     // writeReadStrategy,
     // partialReadStrategy,
 ]
@@ -24,31 +25,25 @@ export interface RunStrategiesResult {
 }
 
 /**
- * Run all enabled strategies and collect pruned IDs.
+ * Run all GC strategies and collect pruned IDs.
+ * All strategies in ALL_STRATEGIES are always enabled (garbage collection).
  * 
  * @param toolMetadata - Map of tool call ID to metadata
  * @param unprunedIds - Tool call IDs not yet pruned (chronological order)
  * @param protectedTools - Tool names that should never be pruned
- * @param enabledStrategies - Strategy names to run (defaults to all)
  */
 export function runStrategies(
     toolMetadata: Map<string, ToolMetadata>,
     unprunedIds: string[],
-    protectedTools: string[],
-    enabledStrategies?: string[]
+    protectedTools: string[]
 ): RunStrategiesResult {
     const byStrategy = new Map<string, StrategyResult>()
     const allPrunedIds = new Set<string>()
 
-    // Filter to enabled strategies (or all if not specified)
-    const strategies = enabledStrategies
-        ? ALL_STRATEGIES.filter(s => enabledStrategies.includes(s.name))
-        : ALL_STRATEGIES
-
     // Track which IDs are still available for each strategy
     let remainingIds = unprunedIds
 
-    for (const strategy of strategies) {
+    for (const strategy of ALL_STRATEGIES) {
         const result = strategy.detect(toolMetadata, remainingIds, protectedTools)
 
         if (result.prunedIds.length > 0) {

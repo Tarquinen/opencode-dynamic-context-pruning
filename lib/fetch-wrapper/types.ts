@@ -17,6 +17,7 @@ export interface FormatDescriptor {
     injectPrunableList(data: any[], injection: string): boolean
     extractToolOutputs(data: any[], state: PluginState): ToolOutput[]
     replaceToolOutput(data: any[], toolId: string, prunedMessage: string, state: PluginState): boolean
+    replaceToolInput(data: any[], toolId: string, prunedMessage: string, state: PluginState): boolean
     hasToolOutputs(data: any[]): boolean
     getLogMetadata(data: any[], replacedCount: number, inputUrl: string): Record<string, any>
 }

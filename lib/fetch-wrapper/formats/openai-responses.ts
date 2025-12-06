@@ -86,6 +86,22 @@ export const openaiResponsesFormat: FormatDescriptor = {
         return replaced
     },
 
+    replaceToolInput(data: any[], toolId: string, prunedMessage: string, _state: PluginState): boolean {
+        const toolIdLower = toolId.toLowerCase()
+        let replaced = false
+
+        for (let i = 0; i < data.length; i++) {
+            const item = data[i]
+            // OpenAI Responses format: function_call items with call_id and arguments
+            if (item.type === 'function_call' && item.call_id?.toLowerCase() === toolIdLower) {
+                data[i] = { ...item, arguments: JSON.stringify({ _pruned: prunedMessage }) }
+                replaced = true
+            }
+        }
+
+        return replaced
+    },
+
     hasToolOutputs(data: any[]): boolean {
         return data.some((item: any) => item.type === 'function_call_output')
     },

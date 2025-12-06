@@ -3,8 +3,11 @@ import { type PluginState, ensureSessionRestored } from "../state"
 import type { Logger } from "../logger"
 import { buildPrunableToolsList, buildEndInjection } from "./prunable-list"
 import { syncToolCache } from "../state/tool-cache"
+import { runStrategies, type ToolMetadata } from "../core/strategies"
+import { accumulateGCStats, accumulateGCInputStats } from "./gc-tracker"
 
 const PRUNED_CONTENT_MESSAGE = '[Output removed to save context - information superseded or no longer needed]'
+const PRUNED_INPUT_MESSAGE = '[Input removed - tool execution failed]'
 
 function getMostRecentActiveSession(allSessions: any): any | undefined {
     const activeSessions = allSessions.data?.filter((s: any) => !s.parentID) || []
@@ -113,6 +116,79 @@ export async function handleFormat(
     }
 
     const { allSessions, allPrunedIds } = await getAllPrunedIds(ctx.client, ctx.state, ctx.logger)
+
+    // Run automatic strategies (error-pruning, deduplication) to find tools to prune
+    const toolIds = Array.from(ctx.state.toolParameters.keys())
+    const alreadyPruned = sessionId ? (ctx.state.prunedIds.get(sessionId) ?? []) : []
+    const alreadyPrunedLower = new Set(alreadyPruned.map(id => id.toLowerCase()))
+    const unprunedIds = toolIds.filter(id => !alreadyPrunedLower.has(id.toLowerCase()))
+
+    // Build metadata map for ALL tools (error-pruning needs to see all tools,
+    // even if output was user-pruned, since input pruning is independent)
+    const toolMetadata = new Map<string, ToolMetadata>()
+    for (const id of toolIds) {
+        const entry = ctx.state.toolParameters.get(id)
+        if (entry) {
+            toolMetadata.set(id, {
+                tool: entry.tool,
+                parameters: entry.parameters,
+                status: entry.status,
+                error: entry.error
+            })
+        }
+    }
+
+    // Run strategies with unprunedIds - deduplication only sees non-user-pruned tools,
+    // error-pruning filters internally based on status (and sees all via toolMetadata)
+    const strategyResult = runStrategies(toolMetadata, unprunedIds, ctx.config.protectedTools)
+
+    // Track error-pruned IDs separately (they get input replacement, not output)
+    const errorPrunedIds = new Set<string>()
+    const errorStrategyResult = strategyResult.byStrategy.get("error-pruning")
+    if (errorStrategyResult && errorStrategyResult.prunedIds.length > 0) {
+        for (const id of errorStrategyResult.prunedIds) {
+            errorPrunedIds.add(id.toLowerCase())
+        }
+        ctx.logger.info("fetch", `Error pruning: ${errorStrategyResult.prunedIds.length} failed tool inputs`, {
+            count: errorStrategyResult.prunedIds.length
+        })
+    }
+
+    // Replace error tool INPUTS (arguments sent to the tool)
+    let inputReplacedCount = 0
+    for (const prunedId of errorPrunedIds) {
+        if (format.replaceToolInput(data, prunedId, PRUNED_INPUT_MESSAGE, ctx.state)) {
+            inputReplacedCount++
+        }
+    }
+
+    if (inputReplacedCount > 0) {
+        ctx.logger.info("fetch", `Replaced error tool inputs (${format.name})`, {
+            replaced: inputReplacedCount
+        })
+        modified = true
+
+        // Track GC tokens for error-pruned inputs
+        if (sessionId) {
+            accumulateGCInputStats(ctx.state, sessionId, Array.from(errorPrunedIds), ctx.logger)
+        }
+    }
+
+    // Merge deduplication results into output replacement set
+    const dedupResult = strategyResult.byStrategy.get("deduplication")
+    if (dedupResult && dedupResult.prunedIds.length > 0) {
+        for (const id of dedupResult.prunedIds) {
+            allPrunedIds.add(id.toLowerCase())
+        }
+        ctx.logger.info("fetch", `Deduplication: ${dedupResult.prunedIds.length} redundant tool outputs`, {
+            count: dedupResult.prunedIds.length
+        })
+
+        // Track GC tokens for deduplicated outputs
+        if (sessionId) {
+            accumulateGCStats(ctx.state, sessionId, dedupResult.prunedIds, body, ctx.logger)
+        }
+    }
 
     if (allPrunedIds.size === 0) {
         return { modified, body }
