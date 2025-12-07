@@ -96,7 +96,7 @@ export async function handleFormat(
             if (prunableList) {
                 const includeNudge = ctx.config.nudge_freq > 0 && ctx.toolTracker.toolResultCount > ctx.config.nudge_freq
 
-                const endInjection = buildEndInjection(prunableList, includeNudge, ctx.prompts.nudgeInstruction, ctx.prompts.systemReminder)
+                const endInjection = buildEndInjection(prunableList, includeNudge)
                 if (format.injectPrunableList(data, endInjection)) {
                     ctx.logger.debug("fetch", `Injected prunable tools list (${format.name})`, {
                         ids: numericIds,

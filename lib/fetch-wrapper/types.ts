@@ -29,7 +29,6 @@ export interface FormatDescriptor {
 export interface SynthPrompts {
     synthInstruction: string
     nudgeInstruction: string
-    systemReminder: string
 }
 
 export interface FetchHandlerContext {
