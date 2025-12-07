@@ -82,7 +82,7 @@ const plugin: Plugin = (async (ctx) => {
 
     return {
         event: createEventHandler(ctx.client, janitorCtx, logger, config, toolTracker),
-        "chat.params": createChatParamsHandler(ctx.client, state, logger),
+        "chat.params": createChatParamsHandler(ctx.client, state, logger, toolTracker),
         tool: config.strategies.onTool.length > 0 ? {
             prune: createPruningTool({
                 client: ctx.client,

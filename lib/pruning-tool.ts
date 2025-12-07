@@ -2,8 +2,9 @@ import { tool } from "@opencode-ai/plugin"
 import type { PluginState } from "./state"
 import type { PluginConfig } from "./config"
 import type { ToolTracker } from "./fetch-wrapper/tool-tracker"
+import type { ToolMetadata } from "./fetch-wrapper/types"
 import { resetToolTrackerCount } from "./fetch-wrapper/tool-tracker"
-import { isSubagentSession } from "./hooks"
+import { isSubagentSession, findCurrentAgent } from "./hooks"
 import { getActualId } from "./state/id-mapping"
 import { sendUnifiedNotification, type NotificationContext } from "./ui/notification"
 import { ensureSessionRestored } from "./state"
@@ -92,7 +93,7 @@ export function createPruningTool(
             saveSessionState(sessionId, new Set(allPrunedIds), sessionStats, logger)
                 .catch(err => logger.error("prune-tool", "Failed to persist state", { error: err.message }))
 
-            const toolMetadata = new Map<string, { tool: string, parameters?: any }>()
+            const toolMetadata = new Map<string, ToolMetadata>()
             for (const id of prunedIds) {
                 const meta = state.toolParameters.get(id.toLowerCase())
                 if (meta) {
@@ -125,20 +126,6 @@ export function createPruningTool(
             return ""
         },
     })
-}
-
-/**
- * Finds the current agent from messages (same logic as janitor.ts).
- */
-function findCurrentAgent(messages: any[]): string | undefined {
-    for (let i = messages.length - 1; i >= 0; i--) {
-        const msg = messages[i]
-        const info = msg.info
-        if (info?.role === 'user') {
-            return info.agent || 'build'
-        }
-    }
-    return undefined
 }
 
 /**

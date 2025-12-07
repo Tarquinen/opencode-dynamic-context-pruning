@@ -2,6 +2,8 @@ import { z } from "zod"
 import type { Logger } from "../logger"
 import type { PruningStrategy } from "../config"
 import type { PluginState } from "../state"
+import type { ToolMetadata } from "../fetch-wrapper/types"
+import { findCurrentAgent } from "../hooks"
 import { buildAnalysisPrompt } from "./prompt"
 import { selectModel, extractModelFromSession } from "../model-selector"
 import { estimateTokensBatch, formatTokenCount } from "../tokenizer"
@@ -28,7 +30,7 @@ export interface PruningResult {
     prunedCount: number
     tokensSaved: number
     llmPrunedIds: string[]
-    toolMetadata: Map<string, { tool: string, parameters?: any }>
+    toolMetadata: Map<string, ToolMetadata>
     sessionStats: SessionStats
 }
 
@@ -263,7 +265,7 @@ async function runLlmAnalysis(
     messages: any[],
     unprunedToolCallIds: string[],
     alreadyPrunedIds: string[],
-    toolMetadata: Map<string, { tool: string, parameters?: any }>,
+    toolMetadata: Map<string, ToolMetadata>,
     options: PruningOptions
 ): Promise<string[]> {
     const { client, state, logger, config } = ctx
@@ -400,7 +402,7 @@ function replacePrunedToolOutputs(messages: any[], prunedIds: string[]): any[] {
 interface ParsedMessages {
     toolCallIds: string[]
     toolOutputs: Map<string, string>
-    toolMetadata: Map<string, { tool: string, parameters?: any }>
+    toolMetadata: Map<string, ToolMetadata>
 }
 
 export function parseMessages(
@@ -435,17 +437,6 @@ export function parseMessages(
     }
 
     return { toolCallIds, toolOutputs, toolMetadata }
-}
-
-function findCurrentAgent(messages: any[]): string | undefined {
-    for (let i = messages.length - 1; i >= 0; i--) {
-        const msg = messages[i]
-        const info = msg.info
-        if (info?.role === 'user') {
-            return info.agent || 'build'
-        }
-    }
-    return undefined
 }
 
 // ============================================================================

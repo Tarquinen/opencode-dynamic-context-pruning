@@ -9,6 +9,11 @@ export interface ToolOutput {
     toolName?: string
 }
 
+export interface ToolMetadata {
+    tool: string
+    parameters?: any
+}
+
 export interface FormatDescriptor {
     name: string
     detect(body: any): boolean

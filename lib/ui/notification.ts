@@ -1,5 +1,6 @@
 import type { Logger } from "../logger"
 import type { SessionStats, GCStats, PruningResult } from "../core/janitor"
+import type { ToolMetadata } from "../fetch-wrapper/types"
 import { formatTokenCount } from "../tokenizer"
 import { extractParameterKey } from "./display-utils"
 
@@ -20,7 +21,7 @@ export interface NotificationData {
     aiPrunedCount: number
     aiTokensSaved: number
     aiPrunedIds: string[]
-    toolMetadata: Map<string, { tool: string, parameters?: any }>
+    toolMetadata: Map<string, ToolMetadata>
     gcPending: GCStats | null
     sessionStats: SessionStats | null
 }
@@ -164,7 +165,7 @@ export function formatPruningResultForTool(
 
 export function buildToolsSummary(
     prunedIds: string[],
-    toolMetadata: Map<string, { tool: string, parameters?: any }>,
+    toolMetadata: Map<string, ToolMetadata>,
     workingDirectory?: string
 ): Map<string, string[]> {
     const toolsSummary = new Map<string, string[]>()

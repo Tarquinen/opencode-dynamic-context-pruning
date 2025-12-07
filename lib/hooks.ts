@@ -60,7 +60,8 @@ export function createEventHandler(
 export function createChatParamsHandler(
     client: any,
     state: PluginState,
-    logger: Logger
+    logger: Logger,
+    toolTracker?: ToolTracker
 ) {
     return async (input: any, _output: any) => {
         const sessionId = input.sessionID
@@ -73,11 +74,14 @@ export function createChatParamsHandler(
 
         if (state.lastSeenSessionId && state.lastSeenSessionId !== sessionId) {
             logger.info("chat.params", "Session changed, resetting state", {
-                from: state.lastSeenSessionId.substring(0, 8),
-                to: sessionId.substring(0, 8)
+                from: state.lastSeenSessionId,
+                to: sessionId
             })
             clearAllMappings()
             state.toolParameters.clear()
+            if (toolTracker) {
+                resetToolTrackerCount(toolTracker)
+            }
         }
 
         state.lastSeenSessionId = sessionId
@@ -147,4 +151,18 @@ export function createChatParamsHandler(
             }
         }
     }
+}
+
+/**
+ * Finds the current agent from messages by scanning backward for user messages.
+ */
+export function findCurrentAgent(messages: any[]): string | undefined {
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i]
+        const info = msg.info
+        if (info?.role === 'user') {
+            return info.agent || 'build'
+        }
+    }
+    return undefined
 }

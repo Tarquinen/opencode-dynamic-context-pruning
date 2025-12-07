@@ -3,16 +3,14 @@
  */
 
 import { deduplicationStrategy } from "./deduplication"
+import type { ToolMetadata } from "../../fetch-wrapper/types"
+
+export type { ToolMetadata }
 
 /**
  * Common interface for rule-based pruning strategies.
  * Each strategy analyzes tool metadata and returns IDs that should be pruned.
  */
-
-export interface ToolMetadata {
-    tool: string
-    parameters?: any
-}
 
 export interface StrategyResult {
     /** Tool call IDs that should be pruned */

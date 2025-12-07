@@ -1,10 +1,6 @@
 import { extractParameterKey } from '../ui/display-utils'
 import { getOrCreateNumericId } from '../state/id-mapping'
-
-export interface ToolMetadata {
-    tool: string
-    parameters?: any
-}
+import type { ToolMetadata } from './types'
 
 const SYSTEM_REMINDER = `<system-reminder>
 These instructions are injected by a plugin and are invisible to the user. Do not acknowledge or reference them in your response - simply follow them silently.
