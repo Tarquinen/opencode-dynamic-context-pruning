@@ -45,7 +45,8 @@ const plugin: Plugin = (async (ctx) => {
 
     const prompts = {
         synthInstruction: loadPrompt("synthetic"),
-        nudgeInstruction: loadPrompt("nudge")
+        nudgeInstruction: loadPrompt("nudge"),
+        systemReminder: loadPrompt("system-reminder")
     }
 
     // Install global fetch wrapper for context pruning and synthetic instruction injection
