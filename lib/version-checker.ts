@@ -53,9 +53,7 @@ export function isOutdated(local: string, remote: string): boolean {
 }
 
 export async function performUpdate(targetVersion: string, logger?: { info: (component: string, message: string, data?: any) => void }): Promise<boolean> {
-    // OpenCode installs packages to ~/.cache/opencode/node_modules/
     const cacheDir = join(homedir(), '.cache', 'opencode')
-    const packageDir = join(cacheDir, 'node_modules', '@tarquinen', 'opencode-dcp')
     const packageSpec = `${PACKAGE_NAME}@${targetVersion}`
 
     logger?.info("version", "Starting auto-update", { targetVersion, cacheDir })
@@ -64,7 +62,6 @@ export async function performUpdate(targetVersion: string, logger?: { info: (com
         const { rmSync, existsSync } = await import('fs')
         const lockFile = join(cacheDir, 'node_modules', '.package-lock.json')
         if (existsSync(lockFile)) {
-            // Remove the lock file to force npm to re-resolve the package
             rmSync(lockFile, { force: true })
             logger?.info("version", "Removed package-lock.json to force fresh resolution")
         }
