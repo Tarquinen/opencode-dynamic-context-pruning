@@ -160,12 +160,28 @@ function createDefaultConfig(): void {
     writeFileSync(GLOBAL_CONFIG_PATH_JSONC, configContent, 'utf-8')
 }
 
-function loadConfigFile(configPath: string): Record<string, any> | null {
+interface ConfigLoadResult {
+    data: Record<string, any> | null
+    parseError?: string
+}
+
+function loadConfigFile(configPath: string): ConfigLoadResult {
+    let fileContent: string
     try {
-        const fileContent = readFileSync(configPath, 'utf-8')
-        return parse(fileContent)
+        fileContent = readFileSync(configPath, 'utf-8')
+    } catch {
+        // File doesn't exist or can't be read - not a parse error
+        return { data: null }
+    }
+
+    try {
+        const parsed = parse(fileContent)
+        if (parsed === undefined || parsed === null) {
+            return { data: null, parseError: 'Config file is empty or invalid' }
+        }
+        return { data: parsed }
     } catch (error: any) {
-        return null
+        return { data: null, parseError: error.message || 'Failed to parse config' }
     }
 }
 
@@ -231,14 +247,23 @@ export function getConfig(ctx: PluginInput): PluginConfig {
 
     // Load and merge global config
     if (configPaths.global) {
-        const globalConfig = loadConfigFile(configPaths.global)
-        if (globalConfig) {
+        const result = loadConfigFile(configPaths.global)
+        if (result.parseError) {
+            ctx.client.tui.showToast({
+                body: {
+                    title: "DCP: Invalid config",
+                    message: `${configPaths.global}\n${result.parseError}\nUsing default values`,
+                    variant: "warning",
+                    duration: 7000
+                }
+            }).catch(() => {})
+        } else if (result.data) {
             config = {
-                enabled: globalConfig.enabled ?? config.enabled,
-                debug: globalConfig.debug ?? config.debug,
-                showUpdateToasts: globalConfig.showUpdateToasts ?? config.showUpdateToasts,
-                pruningSummary: globalConfig.pruningSummary ?? config.pruningSummary,
-                strategies: mergeStrategies(config.strategies, globalConfig.strategies as any)
+                enabled: result.data.enabled ?? config.enabled,
+                debug: result.data.debug ?? config.debug,
+                showUpdateToasts: result.data.showUpdateToasts ?? config.showUpdateToasts,
+                pruningSummary: result.data.pruningSummary ?? config.pruningSummary,
+                strategies: mergeStrategies(config.strategies, result.data.strategies as any)
             }
         }
     } else {
@@ -248,14 +273,23 @@ export function getConfig(ctx: PluginInput): PluginConfig {
 
     // Load and merge project config (overrides global)
     if (configPaths.project) {
-        const projectConfig = loadConfigFile(configPaths.project)
-        if (projectConfig) {
+        const result = loadConfigFile(configPaths.project)
+        if (result.parseError) {
+            ctx.client.tui.showToast({
+                body: {
+                    title: "DCP: Invalid project config",
+                    message: `${configPaths.project}\n${result.parseError}\nUsing global/default values`,
+                    variant: "warning",
+                    duration: 7000
+                }
+            }).catch(() => {})
+        } else if (result.data) {
             config = {
-                enabled: projectConfig.enabled ?? config.enabled,
-                debug: projectConfig.debug ?? config.debug,
-                showUpdateToasts: projectConfig.showUpdateToasts ?? config.showUpdateToasts,
-                pruningSummary: projectConfig.pruningSummary ?? config.pruningSummary,
-                strategies: mergeStrategies(config.strategies, projectConfig.strategies as any)
+                enabled: result.data.enabled ?? config.enabled,
+                debug: result.data.debug ?? config.debug,
+                showUpdateToasts: result.data.showUpdateToasts ?? config.showUpdateToasts,
+                pruningSummary: result.data.pruningSummary ?? config.pruningSummary,
+                strategies: mergeStrategies(config.strategies, result.data.strategies as any)
             }
         }
     }
