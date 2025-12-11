@@ -74,14 +74,30 @@ function findOpencodeDir(startDir: string): string | null {
     return null
 }
 
-function getConfigPaths(ctx?: PluginInput): { global: string | null, project: string | null } {
+function getConfigPaths(ctx?: PluginInput): { global: string | null, configDir: string | null, project: string | null} {
+
+    // Global: ~/.config/opencode/dcp.jsonc|json
     let globalPath: string | null = null
     if (existsSync(GLOBAL_CONFIG_PATH_JSONC)) {
         globalPath = GLOBAL_CONFIG_PATH_JSONC
     } else if (existsSync(GLOBAL_CONFIG_PATH_JSON)) {
         globalPath = GLOBAL_CONFIG_PATH_JSON
     }
-
+    
+    // Custom config directory: $OPENCODE_CONFIG_DIR/dcp.jsonc|json
+    let configDirPath: string | null = null
+    const opencodeConfigDir = process.env.OPENCODE_CONFIG_DIR
+    if (opencodeConfigDir) {
+        const configJsonc = join(opencodeConfigDir, 'dcp.jsonc')
+        const configJson = join(opencodeConfigDir, 'dcp.json')
+        if (existsSync(configJsonc)) {
+            configDirPath = configJsonc
+        } else if (existsSync(configJson)) {
+            configDirPath = configJson
+        }
+    }
+    
+    // Project: <project>/.opencode/dcp.jsonc|json
     let projectPath: string | null = null
     if (ctx?.directory) {
         const opencodeDir = findOpencodeDir(ctx.directory)
@@ -96,7 +112,7 @@ function getConfigPaths(ctx?: PluginInput): { global: string | null, project: st
         }
     }
 
-    return { global: globalPath, project: projectPath }
+    return { global: globalPath, configDir: configDirPath, project: projectPath }
 }
 
 function createDefaultConfig(): void {
@@ -218,6 +234,35 @@ export function getConfig(ctx?: PluginInput): ConfigResult {
         logger.info('config', 'Created default global config', { path: GLOBAL_CONFIG_PATH_JSONC })
     }
 
+    // Config dir: $OPENCODE_CONFIG_DIR/dcp.jsonc|json (overrides global)
+    if (configPaths.configDir) {
+        const configDirConfig = loadConfigFile(configPaths.configDir)
+        if (configDirConfig) {
+            const invalidKeys = getInvalidKeys(configDirConfig)
+            if (invalidKeys.length > 0) {
+                logger.warn('config', 'Config-dir config has invalid keys (ignored)', {
+                  path: configPaths.configDir,
+                  keys: invalidKeys
+                })
+                migrations.push(`Config-dir config has invalid keys: ${invalidKeys.join(', ')}`)
+            } else {
+                config = {
+                    enabled: configDirConfig.enabled ?? config.enabled,
+                    debug: configDirConfig.debug ?? config.debug,
+                    protectedTools: [...new Set([...config.protectedTools, ...(configDirConfig.protectedTools ?? [])])],
+                    model: configDirConfig.model ?? config.model,
+                    showModelErrorToasts: configDirConfig.showModelErrorToasts ?? config.showModelErrorToasts,
+                    showUpdateToasts: configDirConfig.showUpdateToasts ?? config.showUpdateToasts,
+                    strictModelSelection: configDirConfig.strictModelSelection ?? config.strictModelSelection,
+                    strategies: mergeStrategies(config.strategies, configDirConfig.strategies as any),
+                    pruning_summary: configDirConfig.pruning_summary ?? config.pruning_summary,
+                    nudge_freq: configDirConfig.nudge_freq ?? config.nudge_freq
+                }
+                logger.info('config', 'Loaded config-dir config (overrides global)', { path: configPaths.configDir })
+            }
+        }
+    }
+
     if (configPaths.project) {
         const projectConfig = loadConfigFile(configPaths.project)
         if (projectConfig) {
@@ -242,7 +287,7 @@ export function getConfig(ctx?: PluginInput): ConfigResult {
                     pruning_summary: projectConfig.pruning_summary ?? config.pruning_summary,
                     nudge_freq: projectConfig.nudge_freq ?? config.nudge_freq
                 }
-                logger.info('config', 'Loaded project config (overrides global)', { path: configPaths.project })
+                logger.info('config', 'Loaded project config (overrides global + config-dir)', { path: configPaths.project })
             }
         }
     } else if (ctx?.directory) {

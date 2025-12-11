@@ -47,7 +47,11 @@ LLM providers like Anthropic and OpenAI cache prompts based on exact prefix matc
 
 ## Configuration
 
-DCP uses its own config file (`~/.config/opencode/dcp.jsonc` or `.opencode/dcp.jsonc`), created automatically on first run.
+DCP uses its own config file:
+
+- Global: `~/.config/opencode/dcp.jsonc` (or `dcp.json`), created automatically on first run
+- Custom config directory: `$OPENCODE_CONFIG_DIR/dcp.jsonc` (or `dcp.json`), if `OPENCODE_CONFIG_DIR` is set
+- Project: `.opencode/dcp.jsonc` (or `dcp.json`) in your project’s `.opencode` directory
 
 ### Options
 
@@ -80,7 +84,9 @@ DCP uses its own config file (`~/.config/opencode/dcp.jsonc` or `.opencode/dcp.j
 
 ### Config Precedence
 
-Settings are merged in order: **Defaults** → **Global** (`~/.config/opencode/dcp.jsonc`) → **Project** (`.opencode/dcp.jsonc`). Each level overrides the previous, so project settings take priority over global, which takes priority over defaults.
+Settings are merged in order:
+Defaults → Global (`~/.config/opencode/dcp.jsonc`) → Config Dir (`$OPENCODE_CONFIG_DIR/dcp.jsonc`) → Project (`.opencode/dcp.jsonc`).
+Each level overrides the previous, so project settings take priority over config-dir and global, which take priority over defaults.
 
 Restart OpenCode after making config changes.
 
