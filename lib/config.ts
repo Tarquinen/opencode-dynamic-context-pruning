@@ -240,19 +240,19 @@ const defaultConfig: PluginConfig = {
         pruneThinkingBlocks: {
             enabled: false
         },
-        onIdle: {
-            enabled: false,
-            showModelErrorToasts: true,
-            strictModelSelection: false,
-            protectedTools: [...DEFAULT_PROTECTED_TOOLS]
-        },
         pruneTool: {
-            enabled: false,
+            enabled: true,
             protectedTools: [...DEFAULT_PROTECTED_TOOLS],
             nudge: {
                 enabled: true,
                 frequency: 10
             }
+        },
+        onIdle: {
+            enabled: false,
+            showModelErrorToasts: true,
+            strictModelSelection: false,
+            protectedTools: [...DEFAULT_PROTECTED_TOOLS]
         }
     }
 }
@@ -326,6 +326,17 @@ function createDefaultConfig(): void {
     "pruneThinkingBlocks": {
       "enabled": false
     },
+    // Exposes a prune tool to your LLM to call when it determines pruning is necessary
+    "pruneTool": {
+      "enabled": true,
+      // Additional tools to protect from pruning
+      "protectedTools": [],
+      // Nudge the LLM to use the prune tool (every <frequency> tool results)
+      "nudge": {
+        "enabled": true,
+        "frequency": 10
+      }
+    },
     // (Legacy) Run an LLM to analyze what tool calls are no longer relevant on idle
     "onIdle": {
       "enabled": false,
@@ -337,17 +348,6 @@ function createDefaultConfig(): void {
       "strictModelSelection": false,
       // Additional tools to protect from pruning
       "protectedTools": []
-    },
-    // Exposes a prune tool to your LLM to call when it determines pruning is necessary
-    "pruneTool": {
-      "enabled": false,
-      // Additional tools to protect from pruning
-      "protectedTools": [],
-      // Nudge the LLM to use the prune tool (every <frequency> tool results)
-      "nudge": {
-        "enabled": true,
-        "frequency": 10
-      }
     }
   }
 }

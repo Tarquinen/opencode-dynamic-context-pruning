@@ -70,6 +70,17 @@ DCP uses its own config file (`~/.config/opencode/dcp.jsonc` or `.opencode/dcp.j
     "pruneThinkingBlocks": {
       "enabled": false
     },
+    // Exposes a prune tool to your LLM to call when it determines pruning is necessary
+    "pruneTool": {
+      "enabled": true,
+      // Additional tools to protect from pruning
+      "protectedTools": [],
+      // Nudge the LLM to use the prune tool (every <frequency> tool results)
+      "nudge": {
+        "enabled": true,
+        "frequency": 10
+      }
+    },
     // (Legacy) Run an LLM to analyze what tool calls are no longer relevant on idle
     "onIdle": {
       "enabled": false,
@@ -81,17 +92,6 @@ DCP uses its own config file (`~/.config/opencode/dcp.jsonc` or `.opencode/dcp.j
       "strictModelSelection": false,
       // Additional tools to protect from pruning
       "protectedTools": []
-    },
-    // Exposes a prune tool to your LLM to call when it determines pruning is necessary
-    "pruneTool": {
-      "enabled": false,
-      // Additional tools to protect from pruning
-      "protectedTools": [],
-      // Nudge the LLM to use the prune tool (every <frequency> tool results)
-      "nudge": {
-        "enabled": true,
-        "frequency": 10
-      }
     }
   }
 }
