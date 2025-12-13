@@ -27,7 +27,6 @@ Thumbs.db
 
 # OpenCode
 .opencode/
-AGENTS.md
 
 # Tests (local development only)
 tests/

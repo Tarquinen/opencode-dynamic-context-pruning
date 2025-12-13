@@ -1,79 +1,5 @@
-import type { ToolMetadata } from "../fetch-wrapper/types"
-import type { PruningResult } from "../core/janitor"
-
-/**
- * Extracts a human-readable key from tool metadata for display purposes.
- * Used by both deduplication and AI analysis to show what was pruned.
- */
-export function extractParameterKey(metadata: { tool: string, parameters?: any }): string {
-    if (!metadata.parameters) return ''
-
-    const { tool, parameters } = metadata
-
-    if (tool === "read" && parameters.filePath) {
-        return parameters.filePath
-    }
-    if (tool === "write" && parameters.filePath) {
-        return parameters.filePath
-    }
-    if (tool === "edit" && parameters.filePath) {
-        return parameters.filePath
-    }
-
-    if (tool === "list") {
-        return parameters.path || '(current directory)'
-    }
-    if (tool === "glob") {
-        if (parameters.pattern) {
-            const pathInfo = parameters.path ? ` in ${parameters.path}` : ""
-            return `"${parameters.pattern}"${pathInfo}`
-        }
-        return '(unknown pattern)'
-    }
-    if (tool === "grep") {
-        if (parameters.pattern) {
-            const pathInfo = parameters.path ? ` in ${parameters.path}` : ""
-            return `"${parameters.pattern}"${pathInfo}`
-        }
-        return '(unknown pattern)'
-    }
-
-    if (tool === "bash") {
-        if (parameters.description) return parameters.description
-        if (parameters.command) {
-            return parameters.command.length > 50
-                ? parameters.command.substring(0, 50) + "..."
-                : parameters.command
-        }
-    }
-
-    if (tool === "webfetch" && parameters.url) {
-        return parameters.url
-    }
-    if (tool === "websearch" && parameters.query) {
-        return `"${parameters.query}"`
-    }
-    if (tool === "codesearch" && parameters.query) {
-        return `"${parameters.query}"`
-    }
-
-    if (tool === "todowrite") {
-        return `${parameters.todos?.length || 0} todos`
-    }
-    if (tool === "todoread") {
-        return "read todo list"
-    }
-
-    if (tool === "task" && parameters.description) {
-        return parameters.description
-    }
-
-    const paramStr = JSON.stringify(parameters)
-    if (paramStr === '{}' || paramStr === '[]' || paramStr === 'null') {
-        return ''
-    }
-    return paramStr.substring(0, 50)
-}
+import { ToolParameterEntry } from "../state"
+import { extractParameterKey } from "../messages/utils"
 
 export function truncate(str: string, maxLen: number = 60): string {
     if (str.length <= maxLen) return str
@@ -109,18 +35,17 @@ function shortenSinglePath(path: string, workingDirectory?: string): string {
  * Formats a list of pruned items in the style: "→ tool: parameter"
  */
 export function formatPrunedItemsList(
-    prunedIds: string[],
-    toolMetadata: Map<string, ToolMetadata>,
+    pruneToolIds: string[],
+    toolMetadata: Map<string, ToolParameterEntry>,
     workingDirectory?: string
 ): string[] {
     const lines: string[] = []
 
-    for (const prunedId of prunedIds) {
-        const normalizedId = prunedId.toLowerCase()
-        const metadata = toolMetadata.get(normalizedId)
+    for (const id of pruneToolIds) {
+        const metadata = toolMetadata.get(id)
 
         if (metadata) {
-            const paramKey = extractParameterKey(metadata)
+            const paramKey = extractParameterKey(metadata.tool, metadata.parameters)
             if (paramKey) {
                 // Use 60 char limit to match notification style
                 const displayKey = truncate(shortenPath(paramKey, workingDirectory), 60)
@@ -131,10 +56,10 @@ export function formatPrunedItemsList(
         }
     }
 
-    const knownCount = prunedIds.filter(id =>
-        toolMetadata.has(id.toLowerCase())
+    const knownCount = pruneToolIds.filter(id =>
+        toolMetadata.has(id)
     ).length
-    const unknownCount = prunedIds.length - knownCount
+    const unknownCount = pruneToolIds.length - knownCount
 
     if (unknownCount > 0) {
         lines.push(`→ (${unknownCount} tool${unknownCount > 1 ? 's' : ''} with unknown metadata)`)
@@ -147,16 +72,17 @@ export function formatPrunedItemsList(
  * Formats a PruningResult into a human-readable string for the prune tool output.
  */
 export function formatPruningResultForTool(
-    result: PruningResult,
+    prunedIds: string[],
+    toolMetadata: Map<string, ToolParameterEntry>,
     workingDirectory?: string
 ): string {
     const lines: string[] = []
-    lines.push(`Context pruning complete. Pruned ${result.prunedCount} tool outputs.`)
+    lines.push(`Context pruning complete. Pruned ${prunedIds.length} tool outputs.`)
     lines.push('')
 
-    if (result.llmPrunedIds.length > 0) {
-        lines.push(`Semantically pruned (${result.llmPrunedIds.length}):`)
-        lines.push(...formatPrunedItemsList(result.llmPrunedIds, result.toolMetadata, workingDirectory))
+    if (prunedIds.length > 0) {
+        lines.push(`Semantically pruned (${prunedIds.length}):`)
+        lines.push(...formatPrunedItemsList(prunedIds, toolMetadata, workingDirectory))
     }
 
     return lines.join('\n').trim()

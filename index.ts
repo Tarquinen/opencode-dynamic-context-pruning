@@ -1,16 +1,12 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { getConfig } from "./lib/config"
 import { Logger } from "./lib/logger"
-import { createJanitorContext } from "./lib/core/janitor"
-import { checkForUpdates } from "./lib/version-checker"
-import { createPluginState } from "./lib/state"
-import { installFetchWrapper } from "./lib/fetch-wrapper"
-import { createPruningTool } from "./lib/pruning-tool"
-import { createEventHandler, createChatParamsHandler } from "./lib/hooks"
-import { createToolTracker } from "./lib/fetch-wrapper/tool-tracker"
+import { createSessionState } from "./lib/state"
+import { createPruneTool } from "./lib/strategies"
+import { createChatMessageTransformHandler, createEventHandler } from "./lib/hooks"
 
 const plugin: Plugin = (async (ctx) => {
-    const { config, migrations } = getConfig(ctx)
+    const config = getConfig(ctx)
 
     if (!config.enabled) {
         return {}
@@ -23,82 +19,42 @@ const plugin: Plugin = (async (ctx) => {
 
     // Initialize core components
     const logger = new Logger(config.debug)
-    const state = createPluginState()
-
-    const janitorCtx = createJanitorContext(
-        ctx.client,
-        state,
-        logger,
-        {
-            protectedTools: config.protectedTools,
-            model: config.model,
-            showModelErrorToasts: config.showModelErrorToasts ?? true,
-            strictModelSelection: config.strictModelSelection ?? false,
-            pruningSummary: config.pruning_summary,
-            workingDirectory: ctx.directory
-        }
-    )
-
-    // Create tool tracker for nudge injection
-    const toolTracker = createToolTracker()
-
-    // Install global fetch wrapper for context pruning and system message injection
-    installFetchWrapper(state, logger, ctx.client, config, toolTracker)
+    const state = createSessionState()
 
     // Log initialization
-    logger.info("plugin", "DCP initialized", {
+    logger.info("DCP initialized", {
         strategies: config.strategies,
-        model: config.model || "auto"
     })
 
-    // Check for updates after a delay
-    setTimeout(() => {
-        checkForUpdates(ctx.client, logger, config.showUpdateToasts ?? true).catch(() => { })
-    }, 5000)
-
-    // Show migration toast if there were config migrations
-    if (migrations.length > 0) {
-        setTimeout(async () => {
-            try {
-                await ctx.client.tui.showToast({
-                    body: {
-                        title: "DCP: Config upgraded",
-                        message: migrations.join('\n'),
-                        variant: "info",
-                        duration: 8000
-                    }
-                })
-            } catch {
-                // Silently ignore toast errors
-            }
-        }, 7000)
-    }
-
     return {
+        "experimental.chat.messages.transform": createChatMessageTransformHandler(
+            ctx.client,
+            state,
+            logger,
+            config
+        ),
+        tool: config.strategies.pruneTool.enabled ? {
+            prune: createPruneTool({
+                client: ctx.client,
+                state,
+                logger,
+                config,
+                workingDirectory: ctx.directory
+            }),
+        } : undefined,
         config: async (opencodeConfig) => {
             // Add prune to primary_tools by mutating the opencode config
             // This works because config is cached and passed by reference
-            if (config.strategies.onTool.length > 0) {
+            if (config.strategies.pruneTool.enabled) {
                 const existingPrimaryTools = opencodeConfig.experimental?.primary_tools ?? []
                 opencodeConfig.experimental = {
                     ...opencodeConfig.experimental,
                     primary_tools: [...existingPrimaryTools, "prune"],
                 }
-                logger.info("plugin", "Added 'prune' to experimental.primary_tools via config mutation")
+                logger.info("Added 'prune' to experimental.primary_tools via config mutation")
             }
         },
-        event: createEventHandler(ctx.client, janitorCtx, logger, config, toolTracker),
-        "chat.params": createChatParamsHandler(ctx.client, state, logger, toolTracker),
-        tool: config.strategies.onTool.length > 0 ? {
-            prune: createPruningTool({
-                client: ctx.client,
-                state,
-                logger,
-                config,
-                notificationCtx: janitorCtx.notificationCtx,
-                workingDirectory: ctx.directory
-            }, toolTracker),
-        } : undefined,
+        event: createEventHandler(ctx.client, config, state, logger, ctx.directory),
     }
 }) satisfies Plugin
 

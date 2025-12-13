@@ -55,7 +55,7 @@ async function importOpencodeAI(logger?: Logger, maxRetries: number = 3, delayMs
             lastError = error;
 
             if (error.message?.includes('before initialization')) {
-                logger?.debug('model-selector', `Import attempt ${attempt}/${maxRetries} failed, will retry`, {
+                logger?.debug(`Import attempt ${attempt}/${maxRetries} failed, will retry`, {
                     error: error.message
                 });
 
@@ -85,7 +85,7 @@ export async function selectModel(
     if (configModel) {
         const parts = configModel.split('/');
         if (parts.length !== 2) {
-            logger?.warn('model-selector', 'Invalid config model format', { configModel });
+            logger?.warn('Invalid config model format', { configModel });
         } else {
             const [providerID, modelID] = parts;
 
@@ -98,7 +98,7 @@ export async function selectModel(
                     reason: 'Using model specified in dcp.jsonc config'
                 };
             } catch (error: any) {
-                logger?.warn('model-selector', `Config model failed: ${providerID}/${modelID}`, {
+                logger?.warn(`Config model failed: ${providerID}/${modelID}`, {
                     error: error.message
                 });
                 failedModelInfo = { providerID, modelID };

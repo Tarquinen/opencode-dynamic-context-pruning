@@ -1,60 +1,261 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync, copyFileSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs'
 import { join, dirname } from 'path'
 import { homedir } from 'os'
 import { parse } from 'jsonc-parser'
-import { Logger } from './logger'
 import type { PluginInput } from '@opencode-ai/plugin'
 
-export type PruningStrategy = "deduplication" | "ai-analysis"
+export interface Deduplication {
+    enabled: boolean
+    protectedTools: string[]
+}
+
+export interface PruneThinkingBlocks {
+    enabled: boolean
+}
+
+export interface OnIdle {
+    enabled: boolean
+    model?: string
+    showModelErrorToasts?: boolean
+    strictModelSelection?: boolean
+    protectedTools: string[]
+}
+
+export interface PruneToolNudge {
+    enabled: boolean
+    frequency: number
+}
+
+export interface PruneTool {
+    enabled: boolean
+    protectedTools: string[]
+    nudge: PruneToolNudge
+}
 
 export interface PluginConfig {
     enabled: boolean
     debug: boolean
-    protectedTools: string[]
-    model?: string
-    showModelErrorToasts?: boolean
     showUpdateToasts?: boolean
-    strictModelSelection?: boolean
-    pruning_summary: "off" | "minimal" | "detailed"
-    nudge_freq: number
+    pruningSummary: "off" | "minimal" | "detailed"
     strategies: {
-        onIdle: PruningStrategy[]
-        onTool: PruningStrategy[]
+        deduplication: Deduplication
+        pruneThinkingBlocks: PruneThinkingBlocks
+        onIdle: OnIdle
+        pruneTool: PruneTool
     }
 }
 
-export interface ConfigResult {
-    config: PluginConfig
-    migrations: string[]
+const DEFAULT_PROTECTED_TOOLS = ['task', 'todowrite', 'todoread', 'prune', 'batch', 'write', 'edit']
+
+// Valid config keys for validation against user config
+export const VALID_CONFIG_KEYS = new Set([
+    // Top-level keys
+    'enabled',
+    'debug',
+    'showUpdateToasts',
+    'pruningSummary',
+    'strategies',
+    // strategies.deduplication
+    'strategies.deduplication',
+    'strategies.deduplication.enabled',
+    'strategies.deduplication.protectedTools',
+    // strategies.pruneThinkingBlocks
+    'strategies.pruneThinkingBlocks',
+    'strategies.pruneThinkingBlocks.enabled',
+    // strategies.onIdle
+    'strategies.onIdle',
+    'strategies.onIdle.enabled',
+    'strategies.onIdle.model',
+    'strategies.onIdle.showModelErrorToasts',
+    'strategies.onIdle.strictModelSelection',
+    'strategies.onIdle.protectedTools',
+    // strategies.pruneTool
+    'strategies.pruneTool',
+    'strategies.pruneTool.enabled',
+    'strategies.pruneTool.protectedTools',
+    'strategies.pruneTool.nudge',
+    'strategies.pruneTool.nudge.enabled',
+    'strategies.pruneTool.nudge.frequency',
+])
+
+// Extract all key paths from a config object for validation
+function getConfigKeyPaths(obj: Record<string, any>, prefix = ''): string[] {
+    const keys: string[] = []
+    for (const key of Object.keys(obj)) {
+        const fullKey = prefix ? `${prefix}.${key}` : key
+        keys.push(fullKey)
+        if (obj[key] && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+            keys.push(...getConfigKeyPaths(obj[key], fullKey))
+        }
+    }
+    return keys
+}
+
+// Returns invalid keys found in user config
+export function getInvalidConfigKeys(userConfig: Record<string, any>): string[] {
+    const userKeys = getConfigKeyPaths(userConfig)
+    return userKeys.filter(key => !VALID_CONFIG_KEYS.has(key))
+}
+
+// Type validators for config values
+interface ValidationError {
+    key: string
+    expected: string
+    actual: string
+}
+
+function validateConfigTypes(config: Record<string, any>): ValidationError[] {
+    const errors: ValidationError[] = []
+
+    // Top-level validators
+    if (config.enabled !== undefined && typeof config.enabled !== 'boolean') {
+        errors.push({ key: 'enabled', expected: 'boolean', actual: typeof config.enabled })
+    }
+    if (config.debug !== undefined && typeof config.debug !== 'boolean') {
+        errors.push({ key: 'debug', expected: 'boolean', actual: typeof config.debug })
+    }
+    if (config.showUpdateToasts !== undefined && typeof config.showUpdateToasts !== 'boolean') {
+        errors.push({ key: 'showUpdateToasts', expected: 'boolean', actual: typeof config.showUpdateToasts })
+    }
+    if (config.pruningSummary !== undefined) {
+        const validValues = ['off', 'minimal', 'detailed']
+        if (!validValues.includes(config.pruningSummary)) {
+            errors.push({ key: 'pruningSummary', expected: '"off" | "minimal" | "detailed"', actual: JSON.stringify(config.pruningSummary) })
+        }
+    }
+
+    // Strategies validators
+    const strategies = config.strategies
+    if (strategies) {
+        // deduplication
+        if (strategies.deduplication?.enabled !== undefined && typeof strategies.deduplication.enabled !== 'boolean') {
+            errors.push({ key: 'strategies.deduplication.enabled', expected: 'boolean', actual: typeof strategies.deduplication.enabled })
+        }
+        if (strategies.deduplication?.protectedTools !== undefined && !Array.isArray(strategies.deduplication.protectedTools)) {
+            errors.push({ key: 'strategies.deduplication.protectedTools', expected: 'string[]', actual: typeof strategies.deduplication.protectedTools })
+        }
+
+        // pruneThinkingBlocks
+        if (strategies.pruneThinkingBlocks?.enabled !== undefined && typeof strategies.pruneThinkingBlocks.enabled !== 'boolean') {
+            errors.push({ key: 'strategies.pruneThinkingBlocks.enabled', expected: 'boolean', actual: typeof strategies.pruneThinkingBlocks.enabled })
+        }
+
+        // onIdle
+        if (strategies.onIdle) {
+            if (strategies.onIdle.enabled !== undefined && typeof strategies.onIdle.enabled !== 'boolean') {
+                errors.push({ key: 'strategies.onIdle.enabled', expected: 'boolean', actual: typeof strategies.onIdle.enabled })
+            }
+            if (strategies.onIdle.model !== undefined && typeof strategies.onIdle.model !== 'string') {
+                errors.push({ key: 'strategies.onIdle.model', expected: 'string', actual: typeof strategies.onIdle.model })
+            }
+            if (strategies.onIdle.showModelErrorToasts !== undefined && typeof strategies.onIdle.showModelErrorToasts !== 'boolean') {
+                errors.push({ key: 'strategies.onIdle.showModelErrorToasts', expected: 'boolean', actual: typeof strategies.onIdle.showModelErrorToasts })
+            }
+            if (strategies.onIdle.strictModelSelection !== undefined && typeof strategies.onIdle.strictModelSelection !== 'boolean') {
+                errors.push({ key: 'strategies.onIdle.strictModelSelection', expected: 'boolean', actual: typeof strategies.onIdle.strictModelSelection })
+            }
+            if (strategies.onIdle.protectedTools !== undefined && !Array.isArray(strategies.onIdle.protectedTools)) {
+                errors.push({ key: 'strategies.onIdle.protectedTools', expected: 'string[]', actual: typeof strategies.onIdle.protectedTools })
+            }
+        }
+
+        // pruneTool
+        if (strategies.pruneTool) {
+            if (strategies.pruneTool.enabled !== undefined && typeof strategies.pruneTool.enabled !== 'boolean') {
+                errors.push({ key: 'strategies.pruneTool.enabled', expected: 'boolean', actual: typeof strategies.pruneTool.enabled })
+            }
+            if (strategies.pruneTool.protectedTools !== undefined && !Array.isArray(strategies.pruneTool.protectedTools)) {
+                errors.push({ key: 'strategies.pruneTool.protectedTools', expected: 'string[]', actual: typeof strategies.pruneTool.protectedTools })
+            }
+            if (strategies.pruneTool.nudge) {
+                if (strategies.pruneTool.nudge.enabled !== undefined && typeof strategies.pruneTool.nudge.enabled !== 'boolean') {
+                    errors.push({ key: 'strategies.pruneTool.nudge.enabled', expected: 'boolean', actual: typeof strategies.pruneTool.nudge.enabled })
+                }
+                if (strategies.pruneTool.nudge.frequency !== undefined && typeof strategies.pruneTool.nudge.frequency !== 'number') {
+                    errors.push({ key: 'strategies.pruneTool.nudge.frequency', expected: 'number', actual: typeof strategies.pruneTool.nudge.frequency })
+                }
+            }
+        }
+    }
+
+    return errors
+}
+
+// Show validation warnings for a config file
+function showConfigValidationWarnings(
+    ctx: PluginInput,
+    configPath: string,
+    configData: Record<string, any>,
+    isProject: boolean
+): void {
+    const invalidKeys = getInvalidConfigKeys(configData)
+    const typeErrors = validateConfigTypes(configData)
+
+    if (invalidKeys.length === 0 && typeErrors.length === 0) {
+        return
+    }
+
+    const configType = isProject ? 'project config' : 'config'
+    const messages: string[] = []
+
+    if (invalidKeys.length > 0) {
+        const keyList = invalidKeys.slice(0, 3).join(', ')
+        const suffix = invalidKeys.length > 3 ? ` (+${invalidKeys.length - 3} more)` : ''
+        messages.push(`Unknown keys: ${keyList}${suffix}`)
+    }
+
+    if (typeErrors.length > 0) {
+        for (const err of typeErrors.slice(0, 2)) {
+            messages.push(`${err.key}: expected ${err.expected}, got ${err.actual}`)
+        }
+        if (typeErrors.length > 2) {
+            messages.push(`(+${typeErrors.length - 2} more type errors)`)
+        }
+    }
+
+    setTimeout(() => {
+        try {
+            ctx.client.tui.showToast({
+                body: {
+                    title: `DCP: Invalid ${configType}`,
+                    message: `${configPath}\n${messages.join('\n')}`,
+                    variant: "warning",
+                    duration: 7000
+                }
+            })
+        } catch {}
+    }, 7000)
 }
 
 const defaultConfig: PluginConfig = {
     enabled: true,
     debug: false,
-    protectedTools: ['task', 'todowrite', 'todoread', 'prune', 'batch', 'write', 'edit'],
-    showModelErrorToasts: true,
     showUpdateToasts: true,
-    strictModelSelection: false,
-    pruning_summary: 'detailed',
-    nudge_freq: 10,
+    pruningSummary: 'detailed',
     strategies: {
-        onIdle: ['ai-analysis'],
-        onTool: ['ai-analysis']
+        deduplication: {
+            enabled: true,
+            protectedTools: [...DEFAULT_PROTECTED_TOOLS]
+        },
+        pruneThinkingBlocks: {
+            enabled: false
+        },
+        pruneTool: {
+            enabled: true,
+            protectedTools: [...DEFAULT_PROTECTED_TOOLS],
+            nudge: {
+                enabled: true,
+                frequency: 10
+            }
+        },
+        onIdle: {
+            enabled: false,
+            showModelErrorToasts: true,
+            strictModelSelection: false,
+            protectedTools: [...DEFAULT_PROTECTED_TOOLS]
+        }
     }
 }
-
-const VALID_CONFIG_KEYS = new Set([
-    'enabled',
-    'debug',
-    'protectedTools',
-    'model',
-    'showModelErrorToasts',
-    'showUpdateToasts',
-    'strictModelSelection',
-    'pruning_summary',
-    'nudge_freq',
-    'strategies'
-])
 
 const GLOBAL_CONFIG_DIR = join(homedir(), '.config', 'opencode')
 const GLOBAL_CONFIG_PATH_JSONC = join(GLOBAL_CONFIG_DIR, 'dcp.jsonc')
@@ -109,63 +310,73 @@ function createDefaultConfig(): void {
   "enabled": true,
   // Enable debug logging to ~/.config/opencode/logs/dcp/
   "debug": false,
-  // Override model for analysis (format: "provider/model", e.g. "anthropic/claude-haiku-4-5")
-  // "model": "anthropic/claude-haiku-4-5",
-  // Show toast notifications when model selection fails
-  "showModelErrorToasts": true,
   // Show toast notifications when a new version is available
   "showUpdateToasts": true,
-  // Only run AI analysis with session model or configured model (disables fallback models)
-  "strictModelSelection": false,
-  // AI analysis strategies (deduplication runs automatically on every request)
-  "strategies": {
-    // Strategies to run when session goes idle
-    "onIdle": ["ai-analysis"],
-    // Strategies to run when AI calls prune tool
-    "onTool": ["ai-analysis"]
-  },
   // Summary display: "off", "minimal", or "detailed"
-  "pruning_summary": "detailed",
-  // How often to nudge the AI to prune (every N tool results, 0 = disabled)
-  "nudge_freq": 10
-  // Additional tools to protect from pruning
-  // "protectedTools": ["bash"]
+  "pruningSummary": "detailed",
+  // Strategies for pruning tokens from chat history
+  "strategies": {
+    // Remove duplicate tool calls (same tool with same arguments)
+    "deduplication": {
+      "enabled": true,
+      // Additional tools to protect from pruning
+      "protectedTools": []
+    },
+    // Remove thinking/reasoning LLM blocks
+    "pruneThinkingBlocks": {
+      "enabled": false
+    },
+    // Exposes a prune tool to your LLM to call when it determines pruning is necessary
+    "pruneTool": {
+      "enabled": true,
+      // Additional tools to protect from pruning
+      "protectedTools": [],
+      // Nudge the LLM to use the prune tool (every <frequency> tool results)
+      "nudge": {
+        "enabled": true,
+        "frequency": 10
+      }
+    },
+    // (Legacy) Run an LLM to analyze what tool calls are no longer relevant on idle
+    "onIdle": {
+      "enabled": false,
+      // Override model for analysis (format: "provider/model")
+      // "model": "anthropic/claude-haiku-4-5",
+      // Show toast notifications when model selection fails
+      "showModelErrorToasts": true,
+      // When true, fallback models are not permitted
+      "strictModelSelection": false,
+      // Additional tools to protect from pruning
+      "protectedTools": []
+    }
+  }
 }
 `
-
     writeFileSync(GLOBAL_CONFIG_PATH_JSONC, configContent, 'utf-8')
 }
 
-function loadConfigFile(configPath: string): Record<string, any> | null {
-    try {
-        const fileContent = readFileSync(configPath, 'utf-8')
-        return parse(fileContent)
-    } catch (error: any) {
-        return null
-    }
+interface ConfigLoadResult {
+    data: Record<string, any> | null
+    parseError?: string
 }
 
-function getInvalidKeys(config: Record<string, any>): string[] {
-    const invalidKeys: string[] = []
-    for (const key of Object.keys(config)) {
-        if (!VALID_CONFIG_KEYS.has(key)) {
-            invalidKeys.push(key)
+function loadConfigFile(configPath: string): ConfigLoadResult {
+    let fileContent: string
+    try {
+        fileContent = readFileSync(configPath, 'utf-8')
+    } catch {
+        // File doesn't exist or can't be read - not a parse error
+        return { data: null }
+    }
+
+    try {
+        const parsed = parse(fileContent)
+        if (parsed === undefined || parsed === null) {
+            return { data: null, parseError: 'Config file is empty or invalid' }
         }
-    }
-    return invalidKeys
-}
-
-function backupAndResetConfig(configPath: string, logger: Logger): string | null {
-    try {
-        const backupPath = configPath + '.bak'
-        copyFileSync(configPath, backupPath)
-        logger.info('config', 'Created config backup', { backup: backupPath })
-        createDefaultConfig()
-        logger.info('config', 'Created fresh default config', { path: GLOBAL_CONFIG_PATH_JSONC })
-        return backupPath
+        return { data: parsed }
     } catch (error: any) {
-        logger.error('config', 'Failed to backup/reset config', { error: error.message })
-        return null
+        return { data: null, parseError: error.message || 'Failed to parse config' }
     }
 }
 
@@ -174,80 +385,134 @@ function mergeStrategies(
     override?: Partial<PluginConfig['strategies']>
 ): PluginConfig['strategies'] {
     if (!override) return base
+
     return {
-        onIdle: override.onIdle ?? base.onIdle,
-        onTool: override.onTool ?? base.onTool
+        deduplication: {
+            enabled: override.deduplication?.enabled ?? base.deduplication.enabled,
+            protectedTools: [
+                ...new Set([
+                    ...base.deduplication.protectedTools,
+                    ...(override.deduplication?.protectedTools ?? [])
+                ])
+            ]
+        },
+        pruneThinkingBlocks: {
+            enabled: override.pruneThinkingBlocks?.enabled ?? base.pruneThinkingBlocks.enabled
+        },
+        onIdle: {
+            enabled: override.onIdle?.enabled ?? base.onIdle.enabled,
+            model: override.onIdle?.model ?? base.onIdle.model,
+            showModelErrorToasts: override.onIdle?.showModelErrorToasts ?? base.onIdle.showModelErrorToasts,
+            strictModelSelection: override.onIdle?.strictModelSelection ?? base.onIdle.strictModelSelection,
+            protectedTools: [
+                ...new Set([
+                    ...base.onIdle.protectedTools,
+                    ...(override.onIdle?.protectedTools ?? [])
+                ])
+            ]
+        },
+        pruneTool: {
+            enabled: override.pruneTool?.enabled ?? base.pruneTool.enabled,
+            protectedTools: [
+                ...new Set([
+                    ...base.pruneTool.protectedTools,
+                    ...(override.pruneTool?.protectedTools ?? [])
+                ])
+            ],
+            nudge: {
+                enabled: override.pruneTool?.nudge?.enabled ?? base.pruneTool.nudge.enabled,
+                frequency: override.pruneTool?.nudge?.frequency ?? base.pruneTool.nudge.frequency
+            }
+        }
     }
 }
 
-export function getConfig(ctx?: PluginInput): ConfigResult {
-    let config = { ...defaultConfig, protectedTools: [...defaultConfig.protectedTools] }
+function deepCloneConfig(config: PluginConfig): PluginConfig {
+    return {
+        ...config,
+        strategies: {
+            deduplication: {
+                ...config.strategies.deduplication,
+                protectedTools: [...config.strategies.deduplication.protectedTools]
+            },
+            pruneThinkingBlocks: { ...config.strategies.pruneThinkingBlocks },
+            onIdle: {
+                ...config.strategies.onIdle,
+                protectedTools: [...config.strategies.onIdle.protectedTools]
+            },
+            pruneTool: {
+                ...config.strategies.pruneTool,
+                protectedTools: [...config.strategies.pruneTool.protectedTools],
+                nudge: { ...config.strategies.pruneTool.nudge }
+            }
+        }
+    }
+}
+
+export function getConfig(ctx: PluginInput): PluginConfig {
+    let config = deepCloneConfig(defaultConfig)
     const configPaths = getConfigPaths(ctx)
-    const logger = new Logger(true)
-    const migrations: string[] = []
 
+    // Load and merge global config
     if (configPaths.global) {
-        const globalConfig = loadConfigFile(configPaths.global)
-        if (globalConfig) {
-            const invalidKeys = getInvalidKeys(globalConfig)
-
-            if (invalidKeys.length > 0) {
-                logger.info('config', 'Found invalid config keys', { keys: invalidKeys })
-                const backupPath = backupAndResetConfig(configPaths.global, logger)
-                if (backupPath) {
-                    migrations.push(`Old config backed up to ${backupPath}`)
-                }
-            } else {
-                config = {
-                    enabled: globalConfig.enabled ?? config.enabled,
-                    debug: globalConfig.debug ?? config.debug,
-                    protectedTools: [...new Set([...config.protectedTools, ...(globalConfig.protectedTools ?? [])])],
-                    model: globalConfig.model ?? config.model,
-                    showModelErrorToasts: globalConfig.showModelErrorToasts ?? config.showModelErrorToasts,
-                    showUpdateToasts: globalConfig.showUpdateToasts ?? config.showUpdateToasts,
-                    strictModelSelection: globalConfig.strictModelSelection ?? config.strictModelSelection,
-                    strategies: mergeStrategies(config.strategies, globalConfig.strategies as any),
-                    pruning_summary: globalConfig.pruning_summary ?? config.pruning_summary,
-                    nudge_freq: globalConfig.nudge_freq ?? config.nudge_freq
-                }
-                logger.info('config', 'Loaded global config', { path: configPaths.global })
+        const result = loadConfigFile(configPaths.global)
+        if (result.parseError) {
+            setTimeout(async () => {
+                try {
+                    ctx.client.tui.showToast({
+                        body: {
+                            title: "DCP: Invalid config",
+                            message: `${configPaths.global}\n${result.parseError}\nUsing default values`,
+                            variant: "warning",
+                            duration: 7000
+                        }
+                    })
+                } catch {}
+            }, 7000)
+        } else if (result.data) {
+            // Validate config keys and types
+            showConfigValidationWarnings(ctx, configPaths.global, result.data, false)
+            config = {
+                enabled: result.data.enabled ?? config.enabled,
+                debug: result.data.debug ?? config.debug,
+                showUpdateToasts: result.data.showUpdateToasts ?? config.showUpdateToasts,
+                pruningSummary: result.data.pruningSummary ?? config.pruningSummary,
+                strategies: mergeStrategies(config.strategies, result.data.strategies as any)
             }
         }
     } else {
+        // No config exists, create default
         createDefaultConfig()
-        logger.info('config', 'Created default global config', { path: GLOBAL_CONFIG_PATH_JSONC })
     }
 
+    // Load and merge project config (overrides global)
     if (configPaths.project) {
-        const projectConfig = loadConfigFile(configPaths.project)
-        if (projectConfig) {
-            const invalidKeys = getInvalidKeys(projectConfig)
-
-            if (invalidKeys.length > 0) {
-                logger.warn('config', 'Project config has invalid keys (ignored)', {
-                    path: configPaths.project,
-                    keys: invalidKeys
-                })
-                migrations.push(`Project config has invalid keys: ${invalidKeys.join(', ')}`)
-            } else {
-                config = {
-                    enabled: projectConfig.enabled ?? config.enabled,
-                    debug: projectConfig.debug ?? config.debug,
-                    protectedTools: [...new Set([...config.protectedTools, ...(projectConfig.protectedTools ?? [])])],
-                    model: projectConfig.model ?? config.model,
-                    showModelErrorToasts: projectConfig.showModelErrorToasts ?? config.showModelErrorToasts,
-                    showUpdateToasts: projectConfig.showUpdateToasts ?? config.showUpdateToasts,
-                    strictModelSelection: projectConfig.strictModelSelection ?? config.strictModelSelection,
-                    strategies: mergeStrategies(config.strategies, projectConfig.strategies as any),
-                    pruning_summary: projectConfig.pruning_summary ?? config.pruning_summary,
-                    nudge_freq: projectConfig.nudge_freq ?? config.nudge_freq
-                }
-                logger.info('config', 'Loaded project config (overrides global)', { path: configPaths.project })
+        const result = loadConfigFile(configPaths.project)
+        if (result.parseError) {
+            setTimeout(async () => {
+                try {
+                    ctx.client.tui.showToast({
+                        body: {
+                            title: "DCP: Invalid project config",
+                            message: `${configPaths.project}\n${result.parseError}\nUsing global/default values`,
+                            variant: "warning",
+                            duration: 7000
+                        }
+                    })
+                } catch {}
+            }, 7000)
+        } else if (result.data) {
+            // Validate config keys and types
+            showConfigValidationWarnings(ctx, configPaths.project, result.data, true)
+            config = {
+                enabled: result.data.enabled ?? config.enabled,
+                debug: result.data.debug ?? config.debug,
+                showUpdateToasts: result.data.showUpdateToasts ?? config.showUpdateToasts,
+                pruningSummary: result.data.pruningSummary ?? config.pruningSummary,
+                strategies: mergeStrategies(config.strategies, result.data.strategies as any)
             }
         }
-    } else if (ctx?.directory) {
-        logger.debug('config', 'No project config found', { searchedFrom: ctx.directory })
     }
 
-    return { config, migrations }
+    return config
 }

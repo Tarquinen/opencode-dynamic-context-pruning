@@ -8,12 +8,12 @@ import * as fs from "fs/promises";
 import { existsSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
-import type { SessionStats } from "../core/janitor";
+import type { SessionState, SessionStats, Prune } from "./types"
 import type { Logger } from "../logger";
 
 export interface PersistedSessionState {
     sessionName?: string;
-    prunedIds: string[];
+    prune: Prune
     stats: SessionStats;
     lastUpdated: string;
 }
@@ -39,34 +39,35 @@ function getSessionFilePath(sessionId: string): string {
 }
 
 export async function saveSessionState(
-    sessionId: string,
-    prunedIds: Set<string>,
-    stats: SessionStats,
-    logger?: Logger,
+    sessionState: SessionState,
+    logger: Logger,
     sessionName?: string
 ): Promise<void> {
     try {
+        if (!sessionState.sessionId) {
+            return;
+        }
+
         await ensureStorageDir();
 
         const state: PersistedSessionState = {
-            ...(sessionName && { sessionName }),
-            prunedIds: Array.from(prunedIds),
-            stats,
+            sessionName: sessionName,
+            prune: sessionState.prune,
+            stats: sessionState.stats,
             lastUpdated: new Date().toISOString(),
         };
 
-        const filePath = getSessionFilePath(sessionId);
+        const filePath = getSessionFilePath(sessionState.sessionId);
         const content = JSON.stringify(state, null, 2);
         await fs.writeFile(filePath, content, "utf-8");
 
-        logger?.info("persist", "Saved session state to disk", {
-            sessionId: sessionId.slice(0, 8),
-            prunedIds: prunedIds.size,
-            totalTokensSaved: stats.totalTokensSaved,
+        logger.info("Saved session state to disk", {
+            sessionId: sessionState.sessionId,
+            totalTokensSaved: state.stats.totalPruneTokens
         });
     } catch (error: any) {
-        logger?.error("persist", "Failed to save session state", {
-            sessionId: sessionId.slice(0, 8),
+        logger.error("Failed to save session state", {
+            sessionId: sessionState.sessionId,
             error: error?.message,
         });
     }
@@ -74,7 +75,7 @@ export async function saveSessionState(
 
 export async function loadSessionState(
     sessionId: string,
-    logger?: Logger
+    logger: Logger
 ): Promise<PersistedSessionState | null> {
     try {
         const filePath = getSessionFilePath(sessionId);
@@ -86,23 +87,26 @@ export async function loadSessionState(
         const content = await fs.readFile(filePath, "utf-8");
         const state = JSON.parse(content) as PersistedSessionState;
 
-        if (!state || !Array.isArray(state.prunedIds) || !state.stats) {
-            logger?.warn("persist", "Invalid session state file, ignoring", {
-                sessionId: sessionId.slice(0, 8),
+        if (!state ||
+            !state.prune ||
+            !Array.isArray(state.prune.toolIds) ||
+            !state.stats
+        ) {
+            logger.warn("Invalid session state file, ignoring", {
+                sessionId: sessionId,
             });
             return null;
         }
 
-        logger?.info("persist", "Loaded session state from disk", {
-            sessionId: sessionId.slice(0, 8),
-            prunedIds: state.prunedIds.length,
-            totalTokensSaved: state.stats.totalTokensSaved,
+        logger.info("Loaded session state from disk", {
+            sessionId: sessionId,
+            totalTokensSaved: state.stats.totalPruneTokens
         });
 
         return state;
     } catch (error: any) {
-        logger?.warn("persist", "Failed to load session state", {
-            sessionId: sessionId.slice(0, 8),
+        logger.warn("Failed to load session state", {
+            sessionId: sessionId,
             error: error?.message,
         });
         return null;
