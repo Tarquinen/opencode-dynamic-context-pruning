@@ -83,3 +83,42 @@ export const getLastUserMessage = (
     }
     return null
 }
+
+/**
+ * Finds the current agent from messages by scanning backward for user messages.
+ */
+export function findCurrentAgent(messages: WithParts[]): string | undefined {
+    const userMsg = getLastUserMessage(messages)
+    if (!userMsg) return undefined
+    return (userMsg.info as any).agent || 'build'
+}
+
+/**
+ * Builds a list of tool call IDs from messages.
+ */
+export function buildToolIdList(messages: WithParts[]): string[] {
+    const toolIds: string[] = []
+    for (const msg of messages) {
+        if (msg.parts) {
+            for (const part of msg.parts) {
+                if (part.type === 'tool' && part.callID && part.tool) {
+                    toolIds.push(part.callID)
+                }
+            }
+        }
+    }
+    return toolIds
+}
+
+/**
+ * Prunes numeric tool IDs to valid tool call IDs based on the provided tool ID list.
+ */
+export function getPruneToolIds(numericToolIds: number[], toolIdList: string[]): string[] {
+    const pruneToolIds: string[] = []
+    for (const index of numericToolIds) {
+        if (!isNaN(index) && index >= 0 && index < toolIdList.length) {
+            pruneToolIds.push(toolIdList[index])
+        }
+    }
+    return pruneToolIds
+}

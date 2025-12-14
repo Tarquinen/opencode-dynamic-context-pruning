@@ -1,8 +1,7 @@
 import type { SessionState, WithParts } from "../state"
 import type { Logger } from "../logger"
 import type { PluginConfig } from "../config"
-import { buildToolIdList } from "../utils"
-import { getLastUserMessage, extractParameterKey } from "./utils"
+import { getLastUserMessage, extractParameterKey, buildToolIdList } from "./utils"
 import { loadPrompt } from "../prompt"
 
 const PRUNED_TOOL_OUTPUT_REPLACEMENT = '[Output removed to save context - information superseded or no longer needed]'
