@@ -14,11 +14,12 @@ export function createChatMessageTransformHandler(
     logger: Logger,
     config: PluginConfig
 ) {
-    return async(
+    return async (
         input: {},
         output: { messages: WithParts[] }
     ) => {
-        checkSession(client, state, logger, output.messages);
+        await checkSession(client, state, logger, output.messages)
+
         if (state.isSubAgent) {
             return
         }

@@ -4,12 +4,12 @@ import { loadSessionState } from "./persistence"
 import { getLastUserMessage } from "../messages/utils"
 import { isSubAgentSession } from "../utils"
 
-export const checkSession = (
+export const checkSession = async (
     client: any,
     state: SessionState,
     logger: Logger,
     messages: WithParts[]
-) => {
+): Promise<void> => {
 
     const lastUserMessage = getLastUserMessage(messages)
     if (!lastUserMessage) {
@@ -20,14 +20,11 @@ export const checkSession = (
 
     if (state.sessionId === null || state.sessionId !== lastSessionId) {
         logger.info(`Session changed: ${state.sessionId} -> ${lastSessionId}`)
-        ensureSessionInitialized(
-            client,
-            state,
-            lastSessionId,
-            logger
-        ).catch((err) => {
+        try {
+            await ensureSessionInitialized(client, state, lastSessionId, logger)
+        } catch (err: any) {
             logger.error("Failed to initialize session state", { error: err.message })
-        } )
+        }
     }
 }
 
