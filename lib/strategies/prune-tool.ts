@@ -32,12 +32,9 @@ export function createPruneTool(
         description: TOOL_DESCRIPTION,
         args: {
             ids: tool.schema.array(
-                tool.schema.union([
-                    tool.schema.enum(["completion", "noise", "consolidation"]),
-                    tool.schema.number()
-                ])
+                tool.schema.string()
             ).describe(
-                "First element is the reason ('completion', 'noise', 'consolidation'), followed by numeric IDs to prune"
+                "First element is the reason ('completion', 'noise', 'consolidation'), followed by numeric IDs as strings to prune"
             ),
         },
         async execute(args, toolCtx) {
@@ -56,7 +53,9 @@ export function createPruneTool(
                 return "No valid pruning reason found. Use 'completion', 'noise', or 'consolidation' as the first element."
             }
 
-            const numericToolIds: number[] = args.ids.slice(1).filter((id): id is number => typeof id === "number")
+            const numericToolIds: number[] = args.ids.slice(1)
+                .map(id => parseInt(id, 10))
+                .filter((n): n is number => !isNaN(n))
             if (numericToolIds.length === 0) {
                 return "No numeric IDs provided. Format: [reason, id1, id2, ...] where reason is 'completion', 'noise', or 'consolidation'."
             }

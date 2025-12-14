@@ -36,7 +36,7 @@ You must use this tool in three specific scenarios. The rules for distillation (
 <example_noise>
 Assistant: [Reads 'wrong_file.ts']
 This file isn't relevant to the auth system. I'll remove it to clear the context.
-[Uses prune with ids: ["noise", 5]]
+[Uses prune with ids: ["noise", "5"]]
 </example_noise>
 
 <example_consolidation>
@@ -46,11 +46,11 @@ I have analyzed the configuration. Here is the distillation:
 - 'db.ts' connects to mongo:27017.
 - The other 3 files were defaults.
 I have preserved the signals above, so I am now pruning the raw reads.
-[Uses prune with ids: ["consolidation", 10, 11, 12, 13, 14]]
+[Uses prune with ids: ["consolidation", "10", "11", "12", "13", "14"]]
 </example_consolidation>
 
 <example_completion>
 Assistant: [Runs tests, they pass]
 The tests passed. The feature is verified.
-[Uses prune with ids: ["completion", 20, 21]]
+[Uses prune with ids: ["completion", "20", "21"]]
 </example_completion>
