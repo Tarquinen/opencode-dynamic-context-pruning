@@ -27,11 +27,11 @@ DCP uses multiple strategies to reduce context size:
 
 **Deduplication** — Identifies repeated tool calls (e.g., reading the same file multiple times) and keeps only the most recent output. Runs automatically on every request with zero LLM cost.
 
-**Prune Thinking Blocks** — Removes LLM thinking/reasoning blocks from the conversation history.
-
 **On Idle Analysis** — Uses a language model to semantically analyze conversation context during idle periods and identify tool outputs that are no longer relevant.
 
 **Prune Tool** — Exposes a `prune` tool that the AI can call to manually trigger pruning when it determines context cleanup is needed.
+
+*More strategies coming soon.*
 
 Your session history is never modified. DCP replaces pruned outputs with a placeholder before sending requests to your LLM.
 
@@ -65,10 +65,6 @@ DCP uses its own config file (`~/.config/opencode/dcp.jsonc` or `.opencode/dcp.j
       "enabled": true,
       // Additional tools to protect from pruning
       "protectedTools": []
-    },
-    // Remove thinking/reasoning LLM blocks
-    "pruneThinkingBlocks": {
-      "enabled": false
     },
     // Exposes a prune tool to your LLM to call when it determines pruning is necessary
     "pruneTool": {

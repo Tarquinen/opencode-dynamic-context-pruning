@@ -9,10 +9,6 @@ export interface Deduplication {
     protectedTools: string[]
 }
 
-export interface PruneThinkingBlocks {
-    enabled: boolean
-}
-
 export interface OnIdle {
     enabled: boolean
     model?: string
@@ -39,7 +35,6 @@ export interface PluginConfig {
     pruningSummary: "off" | "minimal" | "detailed"
     strategies: {
         deduplication: Deduplication
-        pruneThinkingBlocks: PruneThinkingBlocks
         onIdle: OnIdle
         pruneTool: PruneTool
     }
@@ -59,9 +54,6 @@ export const VALID_CONFIG_KEYS = new Set([
     'strategies.deduplication',
     'strategies.deduplication.enabled',
     'strategies.deduplication.protectedTools',
-    // strategies.pruneThinkingBlocks
-    'strategies.pruneThinkingBlocks',
-    'strategies.pruneThinkingBlocks.enabled',
     // strategies.onIdle
     'strategies.onIdle',
     'strategies.onIdle.enabled',
@@ -133,11 +125,6 @@ function validateConfigTypes(config: Record<string, any>): ValidationError[] {
         }
         if (strategies.deduplication?.protectedTools !== undefined && !Array.isArray(strategies.deduplication.protectedTools)) {
             errors.push({ key: 'strategies.deduplication.protectedTools', expected: 'string[]', actual: typeof strategies.deduplication.protectedTools })
-        }
-
-        // pruneThinkingBlocks
-        if (strategies.pruneThinkingBlocks?.enabled !== undefined && typeof strategies.pruneThinkingBlocks.enabled !== 'boolean') {
-            errors.push({ key: 'strategies.pruneThinkingBlocks.enabled', expected: 'boolean', actual: typeof strategies.pruneThinkingBlocks.enabled })
         }
 
         // onIdle
@@ -237,9 +224,6 @@ const defaultConfig: PluginConfig = {
             enabled: true,
             protectedTools: [...DEFAULT_PROTECTED_TOOLS]
         },
-        pruneThinkingBlocks: {
-            enabled: false
-        },
         pruneTool: {
             enabled: true,
             protectedTools: [...DEFAULT_PROTECTED_TOOLS],
@@ -322,10 +306,6 @@ function createDefaultConfig(): void {
       // Additional tools to protect from pruning
       "protectedTools": []
     },
-    // Remove thinking/reasoning LLM blocks
-    "pruneThinkingBlocks": {
-      "enabled": false
-    },
     // Exposes a prune tool to your LLM to call when it determines pruning is necessary
     "pruneTool": {
       "enabled": true,
@@ -396,9 +376,6 @@ function mergeStrategies(
                 ])
             ]
         },
-        pruneThinkingBlocks: {
-            enabled: override.pruneThinkingBlocks?.enabled ?? base.pruneThinkingBlocks.enabled
-        },
         onIdle: {
             enabled: override.onIdle?.enabled ?? base.onIdle.enabled,
             model: override.onIdle?.model ?? base.onIdle.model,
@@ -435,7 +412,6 @@ function deepCloneConfig(config: PluginConfig): PluginConfig {
                 ...config.strategies.deduplication,
                 protectedTools: [...config.strategies.deduplication.protectedTools]
             },
-            pruneThinkingBlocks: { ...config.strategies.pruneThinkingBlocks },
             onIdle: {
                 ...config.strategies.onIdle,
                 protectedTools: [...config.strategies.onIdle.protectedTools]
