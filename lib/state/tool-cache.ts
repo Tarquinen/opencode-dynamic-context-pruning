@@ -2,7 +2,7 @@ import type { SessionState, ToolStatus, WithParts } from "./index"
 import type { Logger } from "../logger"
 import { PluginConfig } from "../config"
 
-const MAX_TOOL_CACHE_SIZE = 500
+const MAX_TOOL_CACHE_SIZE = 1000
 
 /**
  * Sync tool parameters from OpenCode's session.messages() API.
@@ -16,13 +16,24 @@ export async function syncToolCache(
     try {
         logger.info("Syncing tool parameters from OpenCode messages")
 
+        state.nudgeCounter = 0
+
         for (const msg of messages) {
             for (const part of msg.parts) {
-                if (part.type !== "tool" || !part.callID || state.toolParameters.has(part.callID)) {
+                if (part.type !== "tool" || !part.callID) {
                     continue
                 }
 
-                const alreadyPruned = state.prune.toolIds.includes(part.callID)
+                if (part.tool === "prune") {
+                    state.nudgeCounter = 0
+                } else if (!config.strategies.pruneTool.protectedTools.includes(part.tool)) {
+                    state.nudgeCounter++
+                }
+                state.lastToolPrune = part.tool === "prune"
+
+                if (state.toolParameters.has(part.callID)) {
+                    continue
+                }
 
                 state.toolParameters.set(
                     part.callID,
@@ -34,15 +45,10 @@ export async function syncToolCache(
                         compacted: part.state.status === "completed" && !!part.state.time.compacted,
                     }
                 )
-
-                if (!alreadyPruned && !config.strategies.pruneTool.protectedTools.includes(part.tool)) {
-                    state.nudgeCounter++
-                }
-
-                state.lastToolPrune = part.tool === "prune"
-                logger.info("lastToolPrune=" + String(state.lastToolPrune))
             }
         }
+
+        // logger.info(`nudgeCounter=${state.nudgeCounter}, lastToolPrune=${state.lastToolPrune}`)
 
         trimToolParametersCache(state)
     } catch (error) {
