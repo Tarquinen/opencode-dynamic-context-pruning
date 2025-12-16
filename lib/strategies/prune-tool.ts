@@ -115,7 +115,6 @@ export function createPruneTool(
             state.stats.totalPruneTokens += state.stats.pruneTokenCounter
             state.stats.pruneTokenCounter = 0
             state.nudgeCounter = 0
-            state.recallCounter = 0
 
             saveSessionState(state, logger)
                 .catch(err => logger.error("Failed to persist state", { error: err.message }))

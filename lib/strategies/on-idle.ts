@@ -302,7 +302,6 @@ export async function runOnIdle(
         state.stats.totalPruneTokens += state.stats.pruneTokenCounter
         state.stats.pruneTokenCounter = 0
         state.nudgeCounter = 0
-        state.recallCounter = 0
         state.lastToolPrune = true
 
         // Persist state
