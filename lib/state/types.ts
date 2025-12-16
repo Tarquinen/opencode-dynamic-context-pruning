@@ -31,5 +31,6 @@ export interface SessionState {
     stats: SessionStats
     toolParameters: Map<string, ToolParameterEntry>
     nudgeCounter: number
+    recallCounter: number
     lastToolPrune: boolean
 }

@@ -1,0 +1,14 @@
+<instruction name=recall>
+Pause here to conduct a structured self-assessment. Synthesize all relevant information you've accumulated about the current task, including:
+
+- Key facts, data points, and domain knowledge you've acquired
+- Assumptions you've made and any that have been validated or disproven
+- Gaps in your understanding that still need to be addressed
+- Connections between different pieces of information and how they inform the approach
+
+Then, evaluate your current state of advancement:
+- What specific milestones have you completed?
+- Which paths forward seem most viable based on current knowledge?
+
+Organize this summary to clearly separate established knowledge from open questions, and completed work from remaining challenges. Use this synthesis to explicitly state what should happen next and why. This reflection must be in a message to the user, not in a private thought.
+</instruction>

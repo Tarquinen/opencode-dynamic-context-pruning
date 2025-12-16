@@ -22,10 +22,16 @@ export interface PruneToolNudge {
     frequency: number
 }
 
+export interface PruneToolRecall {
+    enabled: boolean
+    frequency: number
+}
+
 export interface PruneTool {
     enabled: boolean
     protectedTools: string[]
     nudge: PruneToolNudge
+    recall: PruneToolRecall
 }
 
 export interface PluginConfig {
@@ -68,6 +74,9 @@ export const VALID_CONFIG_KEYS = new Set([
     'strategies.pruneTool.nudge',
     'strategies.pruneTool.nudge.enabled',
     'strategies.pruneTool.nudge.frequency',
+    'strategies.pruneTool.recall',
+    'strategies.pruneTool.recall.enabled',
+    'strategies.pruneTool.recall.frequency',
 ])
 
 // Extract all key paths from a config object for validation
@@ -230,6 +239,10 @@ const defaultConfig: PluginConfig = {
             nudge: {
                 enabled: true,
                 frequency: 10
+            },
+            recall: {
+                enabled: true,
+                frequency: 10
             }
         },
         onIdle: {
@@ -331,6 +344,10 @@ function createDefaultConfig(): void {
       "nudge": {
         "enabled": true,
         "frequency": 10
+      },
+      "recall": {
+        "enabled": true,
+        "frequency": 10
       }
     },
     // (Legacy) Run an LLM to analyze what tool calls are no longer relevant on idle
@@ -415,6 +432,10 @@ function mergeStrategies(
             nudge: {
                 enabled: override.pruneTool?.nudge?.enabled ?? base.pruneTool.nudge.enabled,
                 frequency: override.pruneTool?.nudge?.frequency ?? base.pruneTool.nudge.frequency
+            },
+            recall: {
+                enabled: override.pruneTool?.recall?.enabled ?? base.pruneTool.recall.enabled,
+                frequency: override.pruneTool?.recall?.frequency ?? base.pruneTool.recall.frequency
             }
         }
     }
@@ -435,7 +456,8 @@ function deepCloneConfig(config: PluginConfig): PluginConfig {
             pruneTool: {
                 ...config.strategies.pruneTool,
                 protectedTools: [...config.strategies.pruneTool.protectedTools],
-                nudge: { ...config.strategies.pruneTool.nudge }
+                nudge: { ...config.strategies.pruneTool.nudge },
+                recall: { ...config.strategies.pruneTool.recall }
             }
         }
     }

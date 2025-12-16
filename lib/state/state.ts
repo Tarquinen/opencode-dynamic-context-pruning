@@ -41,6 +41,7 @@ export function createSessionState(): SessionState {
         },
         toolParameters: new Map<string, ToolParameterEntry>(),
         nudgeCounter: 0,
+        recallCounter: 0,
         lastToolPrune: false
     }
 }
@@ -57,6 +58,7 @@ export function resetSessionState(state: SessionState): void {
     }
     state.toolParameters.clear()
     state.nudgeCounter = 0
+    state.recallCounter = 0
     state.lastToolPrune = false
 }
 
