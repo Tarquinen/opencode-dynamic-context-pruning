@@ -1,7 +1,7 @@
 import type { SessionState, WithParts } from "../state"
 import type { Logger } from "../logger"
 import type { PluginConfig } from "../config"
-import { getLastUserMessage, getLastAssistantMessage, extractParameterKey, buildToolIdList } from "./utils"
+import { getLastAssistantMessage, extractParameterKey, buildToolIdList } from "./utils"
 import { loadPrompt } from "../prompt"
 
 const PRUNED_TOOL_OUTPUT_REPLACEMENT = '[Output removed to save context - information superseded or no longer needed]'
@@ -50,12 +50,11 @@ export const insertPruneToolContext = (
         return
     }
 
-    const lastUserMessage = getLastUserMessage(messages)
-    if (!lastUserMessage || lastUserMessage.info.role !== 'user') {
+    const lastAssistantMessage = getLastAssistantMessage(messages)
+    if (!lastAssistantMessage) {
+        logger.debug("No assistant message found, skipping prune context injection")
         return
     }
-
-    const lastAssistantMessage = getLastAssistantMessage(messages)
 
     const prunableToolsList = buildPrunableToolsList(state, config, logger, messages)
     if (!prunableToolsList) {
@@ -68,35 +67,19 @@ export const insertPruneToolContext = (
         nudgeString = "\n" + NUDGE_STRING
     }
 
-    const assistantInfo = lastAssistantMessage?.info as any
-    const syntheticMessage: WithParts = {
-        info: {
-            id: "msg_01234567890123456789012345",
-            sessionID: lastUserMessage.info.sessionID,
-            role: "assistant",
-            time: { created: Date.now(), completed: Date.now() },
-            parentID: lastUserMessage.info.id,
-            modelID: assistantInfo?.modelID || lastUserMessage.info.model.modelID,
-            providerID: assistantInfo?.providerID || lastUserMessage.info.model.providerID,
-            mode: assistantInfo?.mode || "build",
-            agent: assistantInfo?.agent || lastUserMessage.info.agent || "build",
-            path: assistantInfo?.path || { cwd: process.cwd(), root: process.cwd() },
-            cost: 0,
-            tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-        } as any,
-        parts: [
-            {
-                id: "prt_01234567890123456789012345",
-                sessionID: lastUserMessage.info.sessionID,
-                messageID: "msg_01234567890123456789012345",
-                type: "text",
-                text: prunableToolsList + nudgeString,
-                synthetic: true,
-            } as any
-        ]
-    }
+    // Inject as a new text part appended to the most recent assistant message.
+    // This preserves thinking blocks (which must be at the start) and works
+    // during tool use loops where the last message may be a user tool_result.
+    const syntheticPart = {
+        id: "prt_dcp_prunable_" + Date.now(),
+        sessionID: lastAssistantMessage.info.sessionID,
+        messageID: lastAssistantMessage.info.id,
+        type: "text",
+        text: prunableToolsList + nudgeString,
+        synthetic: true,
+    } as any
 
-    messages.push(syntheticMessage)
+    lastAssistantMessage.parts.push(syntheticPart)
 }
 
 export const prune = (
