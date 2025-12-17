@@ -27,7 +27,6 @@ export const checkSession = async (
         }
     }
 
-    // Always check for compaction on every message check
     const lastCompactionTimestamp = findLastCompactionTimestamp(messages)
     if (lastCompactionTimestamp > state.lastCompaction) {
         state.lastCompaction = lastCompactionTimestamp
