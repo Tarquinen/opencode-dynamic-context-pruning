@@ -46,6 +46,7 @@ export const VALID_CONFIG_KEYS = new Set([
     // Top-level keys
     'enabled',
     'debug',
+    'showUpdateToasts', // Deprecated but kept for backwards compatibility
     'pruningSummary',
     'strategies',
     // strategies.deduplication
