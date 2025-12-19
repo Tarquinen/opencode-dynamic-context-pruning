@@ -50,12 +50,15 @@ export interface ProviderOverride {
     strategies?: ProviderStrategies
 }
 
+export interface Overrides {
+    provider?: Record<string, ProviderOverride>
+}
+
 export interface PluginConfig {
     enabled: boolean
     debug: boolean
     pruningSummary: "off" | "minimal" | "detailed"
-    disabledProviders: string[]
-    providerOverrides: Record<string, ProviderOverride>
+    overrides: Overrides
     strategies: {
         deduplication: Deduplication
         onIdle: OnIdle
@@ -67,15 +70,15 @@ export interface PluginConfig {
 const DEFAULT_PROTECTED_TOOLS = ['task', 'todowrite', 'todoread', 'prune', 'batch']
 
 // Valid config keys for validation against user config
-// Note: providerOverrides uses dynamic keys so we validate structure, not exact paths
+// Note: overrides.provider uses dynamic keys so we validate structure, not exact paths
 export const VALID_CONFIG_KEYS = new Set([
     // Top-level keys
     'enabled',
     'debug',
     'showUpdateToasts', // Deprecated but kept for backwards compatibility
     'pruningSummary',
-    'disabledProviders',
-    'providerOverrides',
+    'overrides',
+    'overrides.provider',
     'strategies',
     // strategies.deduplication
     'strategies.deduplication',
@@ -103,7 +106,7 @@ export const VALID_CONFIG_KEYS = new Set([
     'strategies.pruneTool.nudge.frequency'
 ])
 
-// Valid keys within providerOverrides.<provider> objects
+// Valid keys within overrides.provider.<provider> objects
 const VALID_PROVIDER_OVERRIDE_KEYS = new Set([
     'enabled',
     'strategies',
@@ -118,13 +121,13 @@ const VALID_PROVIDER_OVERRIDE_KEYS = new Set([
 ])
 
 // Extract all key paths from a config object for validation
-// Skips providerOverrides children since they have dynamic provider keys
+// Skips overrides.provider children since they have dynamic provider keys
 function getConfigKeyPaths(obj: Record<string, any>, prefix = ''): string[] {
     const keys: string[] = []
     for (const key of Object.keys(obj)) {
         const fullKey = prefix ? `${prefix}.${key}` : key
-        // Skip deep traversal of providerOverrides - validated separately
-        if (fullKey === 'providerOverrides') {
+        // Skip deep traversal of overrides.provider - validated separately
+        if (fullKey === 'overrides.provider') {
             keys.push(fullKey)
             continue
         }
@@ -136,7 +139,7 @@ function getConfigKeyPaths(obj: Record<string, any>, prefix = ''): string[] {
     return keys
 }
 
-// Validate providerOverrides structure
+// Validate overrides.provider structure
 function getInvalidProviderOverrideKeys(providerOverrides: Record<string, any>): string[] {
     const invalid: string[] = []
     for (const provider of Object.keys(providerOverrides)) {
@@ -145,7 +148,7 @@ function getInvalidProviderOverrideKeys(providerOverrides: Record<string, any>):
         const overrideKeys = getConfigKeyPaths(override)
         for (const key of overrideKeys) {
             if (!VALID_PROVIDER_OVERRIDE_KEYS.has(key)) {
-                invalid.push(`providerOverrides.${provider}.${key}`)
+                invalid.push(`overrides.provider.${provider}.${key}`)
             }
         }
     }
@@ -156,8 +159,8 @@ function getInvalidProviderOverrideKeys(providerOverrides: Record<string, any>):
 export function getInvalidConfigKeys(userConfig: Record<string, any>): string[] {
     const userKeys = getConfigKeyPaths(userConfig)
     const invalidTopLevel = userKeys.filter(key => !VALID_CONFIG_KEYS.has(key))
-    const invalidProviderOverrides = userConfig.providerOverrides
-        ? getInvalidProviderOverrideKeys(userConfig.providerOverrides)
+    const invalidProviderOverrides = userConfig.overrides?.provider
+        ? getInvalidProviderOverrideKeys(userConfig.overrides.provider)
         : []
     return [...invalidTopLevel, ...invalidProviderOverrides]
 }
@@ -185,31 +188,28 @@ function validateConfigTypes(config: Record<string, any>): ValidationError[] {
             errors.push({ key: 'pruningSummary', expected: '"off" | "minimal" | "detailed"', actual: JSON.stringify(config.pruningSummary) })
         }
     }
-    if (config.disabledProviders !== undefined) {
-        if (!Array.isArray(config.disabledProviders)) {
-            errors.push({ key: 'disabledProviders', expected: 'string[]', actual: typeof config.disabledProviders })
-        } else if (config.disabledProviders.some((p: any) => typeof p !== 'string')) {
-            errors.push({ key: 'disabledProviders', expected: 'string[]', actual: 'array with non-string elements' })
-        }
-    }
-    if (config.providerOverrides !== undefined) {
-        if (typeof config.providerOverrides !== 'object' || Array.isArray(config.providerOverrides)) {
-            errors.push({ key: 'providerOverrides', expected: 'Record<string, ProviderOverride>', actual: typeof config.providerOverrides })
-        } else {
-            // Validate each provider override
-            for (const [provider, override] of Object.entries(config.providerOverrides)) {
-                if (typeof override !== 'object' || override === null) {
-                    errors.push({ key: `providerOverrides.${provider}`, expected: 'ProviderOverride object', actual: typeof override })
-                    continue
-                }
-                const o = override as Record<string, any>
-                if (o.enabled !== undefined && typeof o.enabled !== 'boolean') {
-                    errors.push({ key: `providerOverrides.${provider}.enabled`, expected: 'boolean', actual: typeof o.enabled })
-                }
-                if (o.strategies) {
-                    for (const strategy of ['deduplication', 'onIdle', 'pruneTool', 'supersedeWrites']) {
-                        if (o.strategies[strategy]?.enabled !== undefined && typeof o.strategies[strategy].enabled !== 'boolean') {
-                            errors.push({ key: `providerOverrides.${provider}.strategies.${strategy}.enabled`, expected: 'boolean', actual: typeof o.strategies[strategy].enabled })
+    if (config.overrides !== undefined) {
+        if (typeof config.overrides !== 'object' || Array.isArray(config.overrides)) {
+            errors.push({ key: 'overrides', expected: 'Overrides object', actual: typeof config.overrides })
+        } else if (config.overrides.provider !== undefined) {
+            if (typeof config.overrides.provider !== 'object' || Array.isArray(config.overrides.provider)) {
+                errors.push({ key: 'overrides.provider', expected: 'Record<string, ProviderOverride>', actual: typeof config.overrides.provider })
+            } else {
+                // Validate each provider override
+                for (const [provider, override] of Object.entries(config.overrides.provider)) {
+                    if (typeof override !== 'object' || override === null) {
+                        errors.push({ key: `overrides.provider.${provider}`, expected: 'ProviderOverride object', actual: typeof override })
+                        continue
+                    }
+                    const o = override as Record<string, any>
+                    if (o.enabled !== undefined && typeof o.enabled !== 'boolean') {
+                        errors.push({ key: `overrides.provider.${provider}.enabled`, expected: 'boolean', actual: typeof o.enabled })
+                    }
+                    if (o.strategies) {
+                        for (const strategy of ['deduplication', 'onIdle', 'pruneTool', 'supersedeWrites']) {
+                            if (o.strategies[strategy]?.enabled !== undefined && typeof o.strategies[strategy].enabled !== 'boolean') {
+                                errors.push({ key: `overrides.provider.${provider}.strategies.${strategy}.enabled`, expected: 'boolean', actual: typeof o.strategies[strategy].enabled })
+                            }
                         }
                     }
                 }
@@ -334,8 +334,7 @@ const defaultConfig: PluginConfig = {
     enabled: true,
     debug: false,
     pruningSummary: 'detailed',
-    disabledProviders: [],
-    providerOverrides: {},
+    overrides: {},
     strategies: {
         deduplication: {
             enabled: true,
@@ -435,16 +434,16 @@ function createDefaultConfig(): void {
   "debug": false,
   // Summary display: "off", "minimal", or "detailed"
   "pruningSummary": "detailed",
-  // Completely disable DCP for specific providers (e.g., ["openai", "gemini"])
-  "disabledProviders": [],
   // Per-provider overrides for granular control
-  // "providerOverrides": {
-  //   "openai": {
-  //     "enabled": false  // Disable all DCP features for OpenAI
-  //   },
-  //   "anthropic": {
-  //     "strategies": {
-  //       "pruneTool": { "enabled": false }  // Disable only the prune tool for Anthropic
+  // "overrides": {
+  //   "provider": {
+  //     "openai": {
+  //       "enabled": false  // Disable all DCP features for OpenAI
+  //     },
+  //     "anthropic": {
+  //       "strategies": {
+  //         "pruneTool": { "enabled": false }  // Disable only the prune tool for Anthropic
+  //       }
   //     }
   //   }
   // },
@@ -573,8 +572,7 @@ function mergeStrategies(
 function deepCloneConfig(config: PluginConfig): PluginConfig {
     return {
         ...config,
-        disabledProviders: [...config.disabledProviders],
-        providerOverrides: JSON.parse(JSON.stringify(config.providerOverrides)),
+        overrides: JSON.parse(JSON.stringify(config.overrides)),
         strategies: {
             deduplication: {
                 ...config.strategies.deduplication,
@@ -597,24 +595,27 @@ function deepCloneConfig(config: PluginConfig): PluginConfig {
     }
 }
 
-function mergeProviderOverrides(
-    base: Record<string, ProviderOverride>,
-    override?: Record<string, ProviderOverride>
-): Record<string, ProviderOverride> {
+function mergeOverrides(
+    base: Overrides,
+    override?: Overrides
+): Overrides {
     if (!override) return base
-    const result = { ...base }
-    for (const [provider, overrideConfig] of Object.entries(override)) {
-        if (!result[provider]) {
-            result[provider] = overrideConfig
-        } else {
-            result[provider] = {
-                enabled: overrideConfig.enabled ?? result[provider].enabled,
-                strategies: overrideConfig.strategies
-                    ? {
-                        ...result[provider].strategies,
-                        ...overrideConfig.strategies
-                    }
-                    : result[provider].strategies
+    const result: Overrides = { ...base }
+    if (override.provider) {
+        result.provider = result.provider ?? {}
+        for (const [provider, overrideConfig] of Object.entries(override.provider)) {
+            if (!result.provider[provider]) {
+                result.provider[provider] = overrideConfig
+            } else {
+                result.provider[provider] = {
+                    enabled: overrideConfig.enabled ?? result.provider[provider].enabled,
+                    strategies: overrideConfig.strategies
+                        ? {
+                            ...result.provider[provider].strategies,
+                            ...overrideConfig.strategies
+                        }
+                        : result.provider[provider].strategies
+                }
             }
         }
     }
@@ -649,8 +650,7 @@ export function getConfig(ctx: PluginInput): PluginConfig {
                 enabled: result.data.enabled ?? config.enabled,
                 debug: result.data.debug ?? config.debug,
                 pruningSummary: result.data.pruningSummary ?? config.pruningSummary,
-                disabledProviders: result.data.disabledProviders ?? config.disabledProviders,
-                providerOverrides: mergeProviderOverrides(config.providerOverrides, result.data.providerOverrides),
+                overrides: mergeOverrides(config.overrides, result.data.overrides),
                 strategies: mergeStrategies(config.strategies, result.data.strategies as any)
             }
         }
@@ -682,8 +682,7 @@ export function getConfig(ctx: PluginInput): PluginConfig {
                 enabled: result.data.enabled ?? config.enabled,
                 debug: result.data.debug ?? config.debug,
                 pruningSummary: result.data.pruningSummary ?? config.pruningSummary,
-                disabledProviders: result.data.disabledProviders ?? config.disabledProviders,
-                providerOverrides: mergeProviderOverrides(config.providerOverrides, result.data.providerOverrides),
+                overrides: mergeOverrides(config.overrides, result.data.overrides),
                 strategies: mergeStrategies(config.strategies, result.data.strategies as any)
             }
         }
@@ -712,8 +711,7 @@ export function getConfig(ctx: PluginInput): PluginConfig {
                 enabled: result.data.enabled ?? config.enabled,
                 debug: result.data.debug ?? config.debug,
                 pruningSummary: result.data.pruningSummary ?? config.pruningSummary,
-                disabledProviders: result.data.disabledProviders ?? config.disabledProviders,
-                providerOverrides: mergeProviderOverrides(config.providerOverrides, result.data.providerOverrides),
+                overrides: mergeOverrides(config.overrides, result.data.overrides),
                 strategies: mergeStrategies(config.strategies, result.data.strategies as any)
             }
         }
@@ -733,29 +731,14 @@ export interface EffectiveProviderConfig {
 }
 
 /**
- * Computes the effective config for a specific provider, applying:
- * 1. disabledProviders list (completely disables all features)
- * 2. providerOverrides (granular per-strategy overrides)
+ * Computes the effective config for a specific provider, applying overrides.provider.<name>
  */
 export function getEffectiveProviderConfig(
     config: PluginConfig,
     providerID: string
 ): EffectiveProviderConfig {
-    // Check if provider is completely disabled
-    if (config.disabledProviders.includes(providerID)) {
-        return {
-            enabled: false,
-            strategies: {
-                deduplication: false,
-                onIdle: false,
-                pruneTool: false,
-                supersedeWrites: false
-            }
-        }
-    }
-
     // Check for provider-specific overrides
-    const override = config.providerOverrides[providerID]
+    const override = config.overrides.provider?.[providerID]
     if (override?.enabled === false) {
         return {
             enabled: false,
