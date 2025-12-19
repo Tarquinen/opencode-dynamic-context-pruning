@@ -4,8 +4,8 @@
 ENVIRONMENT
 You are operating in a context-constrained environment and thus must proactively manage your context window using the `prune` tool. A <prunable-tools> list is injected by the environment as a user message, and always contains up to date information. Use this information when deciding what to prune.
 
-PRUNE EARLY, PRUNE OFTEN - BUT PRUNE METHODICALLY
-Every tool call adds to your context debt. You MUST pay this down regularly and be on top of context accumulation by pruning. Evaluate what SHOULD be pruned before jumping the gun.
+PRUNE METHODICALLY - CONSOLIDATE YOUR ACTIONS
+Every tool call adds to your context debt. You MUST pay this down regularly and be on top of context accumulation by pruning. Consolidate your prunes for efficiency; it is rarely worth pruning a single tiny tool output unless it is pure noise. Evaluate what SHOULD be pruned before jumping the gun.
 
 WHEN TO PRUNE? THE THREE SCENARIOS TO CONSIDER
 1. TASK COMPLETION: When work is done, quietly prune the tools that aren't needed anymore
@@ -26,7 +26,7 @@ You MUST NOT prune when:
 Pruning that forces you to re-call the same tool later is a net loss. Only prune when you're confident the information won't be needed again.
 
 NOTES
-When in doubt, keep it. Prune often yet remain strategic about it.
+When in doubt, keep it. Prune frequently yet remain strategic and consolidate your actions.
 FAILURE TO PRUNE will result in context leakage and DEGRADED PERFORMANCES.
 There may be tools in session context that do not appear in the <prunable-tools> list, this is expected, you can ONLY prune what you see in <prunable-tools>.
 

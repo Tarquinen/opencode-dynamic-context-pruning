@@ -31,7 +31,8 @@ You must use this tool in three specific scenarios. The rules for distillation (
    - **Prefer keeping over re-fetching:** If uncertain whether you'll need the output again, keep it. The cost of retaining context is lower than the cost of redundant tool calls.
 
 ## Best Practices
-- **Don't wait too long:** Prune frequently to keep the context agile.
+- **Consolidate your prunes:** Don't prune a single small tool output (like a short bash command) unless it's pure noise. Wait until you have several items or a few large outputs to prune. Aim for high-impact prunes that significantly reduce context size or noise.
+- **Don't wait too long:** Prune frequently to keep the context agile, but balance this with the need for consolidation.
 - **Be surgical:** You can mix strategies. Prune noise without comment, while distilling useful context in the same turn.
 - **Verify:** Ensure you have captured what you need before deleting useful raw data.
 - **Think ahead:** Before pruning, ask: "Will I need this output for an upcoming task?" If you researched a file you'll later edit, or gathered context for implementation, do NOT prune it—even if you've distilled findings. Distillation captures *knowledge*; implementation requires *context*.
