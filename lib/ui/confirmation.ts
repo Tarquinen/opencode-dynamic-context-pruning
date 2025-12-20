@@ -1,11 +1,11 @@
-import type { Logger } from "../logger";
-import type { ToolParameterEntry } from "../state";
-import { extractParameterKey } from "../messages/utils";
-import { shortenPath, truncate } from "./utils";
+import type {Logger} from "../logger";
+import type {ToolParameterEntry} from "../state";
+import {extractParameterKey} from "../messages/utils";
+import {shortenPath, truncate} from "./utils";
 
 export interface PendingConfirmation {
   resolve: (confirmedIds: string[]) => void;
-  items: Array<{ id: string; label: string; checked: boolean }>;
+  items: Array<{id: string; label: string; checked: boolean}>;
 }
 
 // Shared state for pending confirmations
@@ -49,11 +49,11 @@ export async function requestPruneConfirmation(
   toolMetadata: Map<string, ToolParameterEntry>,
   params: any,
   logger: Logger,
-  workingDirectory: string,
+  workingDirectory: string
 ): Promise<string[]> {
   // If auto-confirm is enabled, immediately return all IDs
   if (autoConfirmEnabled) {
-    logger.info("Auto-confirming prune", { itemCount: pruneToolIds.length });
+    logger.info("Auto-confirming prune", {itemCount: pruneToolIds.length});
     return pruneToolIds;
   }
 
@@ -62,32 +62,36 @@ export async function requestPruneConfirmation(
     const meta = toolMetadata.get(id);
     let label = id;
     if (meta) {
+      const toolName = meta.tool.charAt(0).toUpperCase() + meta.tool.slice(1);
       const paramKey = extractParameterKey(meta.tool, meta.parameters);
       if (paramKey) {
-        label = `${meta.tool}: ${truncate(shortenPath(paramKey, workingDirectory), 50)}`;
+        label = `${toolName} ${truncate(
+          shortenPath(paramKey, workingDirectory),
+          50
+        )}`;
       } else {
-        label = meta.tool;
+        label = `${toolName}`;
       }
     }
-    return { id, label, checked: true };
+    return {id, label, checked: true};
   });
 
-  logger.info("Requesting prune confirmation", { itemCount: items.length });
+  logger.info("Requesting prune confirmation", {itemCount: items.length});
 
   // Create the promise that will be resolved by UI events
   return new Promise<string[]>((resolve) => {
-    setPendingPrune({ resolve, items });
+    setPendingPrune({resolve, items});
 
     const agent = params.agent || undefined;
     const model =
       params.providerId && params.modelId
-        ? { providerID: params.providerId, modelID: params.modelId }
+        ? {providerID: params.providerId, modelID: params.modelId}
         : undefined;
 
     // Send the confirmation UI message
     client.session
       .prompt({
-        path: { id: sessionId },
+        path: {id: sessionId},
         body: {
           noReply: true,
           agent,
@@ -97,7 +101,7 @@ export async function requestPruneConfirmation(
               type: "text",
               text: "dcp-confirm",
               plugin: true,
-              metadata: { items },
+              metadata: {items},
             },
           ],
         },
