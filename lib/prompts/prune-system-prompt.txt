@@ -10,7 +10,7 @@ Every tool call adds to your context debt. You MUST pay this down regularly and 
 WHEN TO PRUNE? THE THREE SCENARIOS TO CONSIDER
 1. TASK COMPLETION: When work is done, quietly prune the tools that aren't needed anymore. No distillation.
 2. NOISE REMOVAL: If outputs are irrelevant, unhelpful, or superseded by newer info, prune. No distillation.
-3. CONTEXT CONSOLIDATION: When pruning valuable context to the task at hand, you MUST ALWAYS provide the key findings in the `metadata.distillation` parameter of the `prune` tool (as an object). Be surgical and strategic in what you extract. THINK: high signal, low noise
+3. CONTEXT CONSOLIDATION: When pruning valuable context to the task at hand, you MUST ALWAYS provide the key findings in the `metadata.distillation` parameter of the `prune` tool (as an object). Your distillation must be high-fidelity and comprehensive, capturing technical details (signatures, logic, constraints) such that the raw output is no longer needed. THINK: high signal, complete technical substitute.
 
 You WILL use the `prune` tool when ANY of these are true:
 - Task or sub-task is complete

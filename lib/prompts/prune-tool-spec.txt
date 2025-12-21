@@ -23,10 +23,11 @@ You must use this tool in three specific scenarios. The rules for distillation (
 **When:** You have gathered useful information. Wait until you have several items or a few large outputs to prune, rather than doing tiny, frequent prunes. Aim for high-impact prunes that significantly reduce context size.
 **Action:** Convert raw data into distilled knowledge. This allows you to discard large outputs (like full file reads) while keeping only the specific parts you need (like a single function signature or constant).
 **Distillation:** MANDATORY. You MUST provide the distilled findings in the `metadata.distillation` parameter of the `prune` tool (as an object).
-   - **Extract specific value:** If you read a large file but only care about one function, record that function's details.
-   - **Consolidate:** When pruning multiple tools, your distillation object MUST aggregate findings from ALL of them. Ensure you capture any information necessary to solve the current task.
-   - Structure: Map the `ID` from the `<prunable-tools>` list to its distilled findings.
-     Example: `{ "20": { "findings": "...", "logic": "..." } }`
+   - **Comprehensive Capture:** Distillation is not just a summary. It must be a high-fidelity representation of the technical details. If you read a file, the distillation should include function signatures, specific logic flows, constant values, and any constraints or edge cases discovered.
+   - **Task-Relevant Verbosity:** Be as verbose as necessary to ensure that the "distilled" version is a complete substitute for the raw output for the task at hand. If you will need to reference a specific algorithm or interface later, include it in its entirety within the distillation.
+    - **Consolidate:** When pruning multiple tools, your `distillation` object MUST contain a corresponding entry for EVERY ID being pruned. You must capture high-fidelity findings for each tool individually to ensure no signal is lost.
+    - Structure: Map EVERY `ID` from the `ids` array to its specific distilled findings.
+      Example: `{ "20": { ... }, "21": { ... } }`
    - Capture all relevant details (function names, logic, constraints) to ensure no signal is lost.
    - Prioritize information that is essential for the immediate next steps of your plan.
    - Once distilled into the `metadata` object, the raw tool output can be safely pruned.
@@ -34,6 +35,7 @@ You must use this tool in three specific scenarios. The rules for distillation (
    - **Prefer keeping over re-fetching:** If uncertain whether you'll need the output again, keep it. The cost of retaining context is lower than the cost of redundant tool calls.
 
 ## Best Practices
+- **Technical Fidelity:** Ensure that types, parameters, and return values are preserved if they are relevant to upcoming implementation steps.
 - **Strategic Consolidation:** Don't prune single small tool outputs (like short bash commands) unless they are pure noise. Instead, wait until you have several items or large outputs to perform high-impact prunes. This balances the need for an agile context with the efficiency of larger batches.
 - **Think ahead:** Before pruning, ask: "Will I need this output for an upcoming task?" If you researched a file you'll later edit, or gathered context for implementation, do NOT prune it.
 
@@ -46,16 +48,31 @@ This file isn't relevant to the auth system. I'll remove it to clear the context
 </example_noise>
 
 <example_consolidation>
-Assistant: [Reads 5 different config files]
-I'll preserve the configuration details and prune the raw reads.
-[Uses prune with ids: ["10", "11", "12", "13", "14"], metadata: {
+Assistant: [Reads service implementation, types, and config]
+I'll preserve the full technical specification and implementation logic before pruning.
+[Uses prune with ids: ["10", "11", "12"], metadata: {
   "reason": "consolidation",
   "distillation": {
-    "10": "uses port 3000",
-    "11": "connects to mongo:27017",
-    "12": "defines shared constants",
-    "13": "export defaults",
-    "14": "unused fallback"
+    "10": {
+      "file": "src/services/auth.ts",
+      "signatures": [
+        "async function validateToken(token: string): Promise<User | null>",
+        "function hashPassword(password: string): string"
+      ],
+      "logic": "The validateToken function first checks the local cache before calling the external OIDC provider. It uses a 5-minute TTL for cached tokens.",
+      "dependencies": ["import { cache } from '../utils/cache'", "import { oidc } from '../config'"],
+      "constraints": "Tokens must be at least 128 chars long. hashPassword uses bcrypt with 12 rounds."
+    },
+    "11": {
+      "file": "src/types/user.ts",
+      "interface": "interface User { id: string; email: string; permissions: ('read' | 'write' | 'admin')[]; status: 'active' | 'suspended'; }",
+      "context": "The permissions array is strictly typed and used by the RBAC middleware."
+    },
+    "12": {
+      "file": "config/default.json",
+      "values": { "PORT": 3000, "RETRY_STRATEGY": "exponential", "MAX_ATTEMPTS": 5 },
+      "impact": "The retry strategy affects all outgoing HTTP clients in the core module."
+    }
   }
 }]
 </example_consolidation>
