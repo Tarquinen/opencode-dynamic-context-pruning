@@ -37,7 +37,6 @@ function estimateTokensBatch(texts: string[]): number[] {
 
 /**
  * Calculates approximate tokens saved by pruning the given tool call IDs.
- * TODO: Make it count message content that are not tool outputs. Currently it ONLY covers tool outputs and errors
  */
 export const calculateTokensSaved = (
     state: SessionState,

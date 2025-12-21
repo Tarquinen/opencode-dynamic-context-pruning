@@ -34,6 +34,21 @@ export interface PruneTool {
     nudge: PruneToolNudge
 }
 
+export interface DiscardTool {
+    enabled: boolean
+    protectedTools: string[]
+    turnProtection: PruneToolTurnProtection
+    nudge: PruneToolNudge
+}
+
+export interface ExtractTool {
+    enabled: boolean
+    protectedTools: string[]
+    turnProtection: PruneToolTurnProtection
+    nudge: PruneToolNudge
+    showDistillation: boolean
+}
+
 export interface SupersedeWrites {
     enabled: boolean
 }
@@ -45,12 +60,13 @@ export interface PluginConfig {
     strategies: {
         deduplication: Deduplication
         onIdle: OnIdle
-        pruneTool: PruneTool
+        discardTool: DiscardTool
+        extractTool: ExtractTool
         supersedeWrites: SupersedeWrites
     }
 }
 
-const DEFAULT_PROTECTED_TOOLS = ['task', 'todowrite', 'todoread', 'prune', 'batch']
+const DEFAULT_PROTECTED_TOOLS = ['task', 'todowrite', 'todoread', 'discard', 'extract', 'batch']
 
 // Valid config keys for validation against user config
 export const VALID_CONFIG_KEYS = new Set([
@@ -74,16 +90,27 @@ export const VALID_CONFIG_KEYS = new Set([
     'strategies.onIdle.showModelErrorToasts',
     'strategies.onIdle.strictModelSelection',
     'strategies.onIdle.protectedTools',
-    // strategies.pruneTool
-    'strategies.pruneTool',
-    'strategies.pruneTool.enabled',
-    'strategies.pruneTool.protectedTools',
-    'strategies.pruneTool.turnProtection',
-    'strategies.pruneTool.turnProtection.enabled',
-    'strategies.pruneTool.turnProtection.turns',
-    'strategies.pruneTool.nudge',
-    'strategies.pruneTool.nudge.enabled',
-    'strategies.pruneTool.nudge.frequency'
+    // strategies.discardTool
+    'strategies.discardTool',
+    'strategies.discardTool.enabled',
+    'strategies.discardTool.protectedTools',
+    'strategies.discardTool.turnProtection',
+    'strategies.discardTool.turnProtection.enabled',
+    'strategies.discardTool.turnProtection.turns',
+    'strategies.discardTool.nudge',
+    'strategies.discardTool.nudge.enabled',
+    'strategies.discardTool.nudge.frequency',
+    // strategies.extractTool
+    'strategies.extractTool',
+    'strategies.extractTool.enabled',
+    'strategies.extractTool.protectedTools',
+    'strategies.extractTool.turnProtection',
+    'strategies.extractTool.turnProtection.enabled',
+    'strategies.extractTool.turnProtection.turns',
+    'strategies.extractTool.nudge',
+    'strategies.extractTool.nudge.enabled',
+    'strategies.extractTool.nudge.frequency',
+    'strategies.extractTool.showDistillation'
 ])
 
 // Extract all key paths from a config object for validation
@@ -159,29 +186,58 @@ function validateConfigTypes(config: Record<string, any>): ValidationError[] {
             }
         }
 
-        // pruneTool
-        if (strategies.pruneTool) {
-            if (strategies.pruneTool.enabled !== undefined && typeof strategies.pruneTool.enabled !== 'boolean') {
-                errors.push({ key: 'strategies.pruneTool.enabled', expected: 'boolean', actual: typeof strategies.pruneTool.enabled })
+        // discardTool
+        if (strategies.discardTool) {
+            if (strategies.discardTool.enabled !== undefined && typeof strategies.discardTool.enabled !== 'boolean') {
+                errors.push({ key: 'strategies.discardTool.enabled', expected: 'boolean', actual: typeof strategies.discardTool.enabled })
             }
-            if (strategies.pruneTool.protectedTools !== undefined && !Array.isArray(strategies.pruneTool.protectedTools)) {
-                errors.push({ key: 'strategies.pruneTool.protectedTools', expected: 'string[]', actual: typeof strategies.pruneTool.protectedTools })
+            if (strategies.discardTool.protectedTools !== undefined && !Array.isArray(strategies.discardTool.protectedTools)) {
+                errors.push({ key: 'strategies.discardTool.protectedTools', expected: 'string[]', actual: typeof strategies.discardTool.protectedTools })
             }
-            if (strategies.pruneTool.turnProtection) {
-                if (strategies.pruneTool.turnProtection.enabled !== undefined && typeof strategies.pruneTool.turnProtection.enabled !== 'boolean') {
-                    errors.push({ key: 'strategies.pruneTool.turnProtection.enabled', expected: 'boolean', actual: typeof strategies.pruneTool.turnProtection.enabled })
+            if (strategies.discardTool.turnProtection) {
+                if (strategies.discardTool.turnProtection.enabled !== undefined && typeof strategies.discardTool.turnProtection.enabled !== 'boolean') {
+                    errors.push({ key: 'strategies.discardTool.turnProtection.enabled', expected: 'boolean', actual: typeof strategies.discardTool.turnProtection.enabled })
                 }
-                if (strategies.pruneTool.turnProtection.turns !== undefined && typeof strategies.pruneTool.turnProtection.turns !== 'number') {
-                    errors.push({ key: 'strategies.pruneTool.turnProtection.turns', expected: 'number', actual: typeof strategies.pruneTool.turnProtection.turns })
+                if (strategies.discardTool.turnProtection.turns !== undefined && typeof strategies.discardTool.turnProtection.turns !== 'number') {
+                    errors.push({ key: 'strategies.discardTool.turnProtection.turns', expected: 'number', actual: typeof strategies.discardTool.turnProtection.turns })
                 }
             }
-            if (strategies.pruneTool.nudge) {
-                if (strategies.pruneTool.nudge.enabled !== undefined && typeof strategies.pruneTool.nudge.enabled !== 'boolean') {
-                    errors.push({ key: 'strategies.pruneTool.nudge.enabled', expected: 'boolean', actual: typeof strategies.pruneTool.nudge.enabled })
+            if (strategies.discardTool.nudge) {
+                if (strategies.discardTool.nudge.enabled !== undefined && typeof strategies.discardTool.nudge.enabled !== 'boolean') {
+                    errors.push({ key: 'strategies.discardTool.nudge.enabled', expected: 'boolean', actual: typeof strategies.discardTool.nudge.enabled })
                 }
-                if (strategies.pruneTool.nudge.frequency !== undefined && typeof strategies.pruneTool.nudge.frequency !== 'number') {
-                    errors.push({ key: 'strategies.pruneTool.nudge.frequency', expected: 'number', actual: typeof strategies.pruneTool.nudge.frequency })
+                if (strategies.discardTool.nudge.frequency !== undefined && typeof strategies.discardTool.nudge.frequency !== 'number') {
+                    errors.push({ key: 'strategies.discardTool.nudge.frequency', expected: 'number', actual: typeof strategies.discardTool.nudge.frequency })
                 }
+            }
+        }
+
+        // extractTool
+        if (strategies.extractTool) {
+            if (strategies.extractTool.enabled !== undefined && typeof strategies.extractTool.enabled !== 'boolean') {
+                errors.push({ key: 'strategies.extractTool.enabled', expected: 'boolean', actual: typeof strategies.extractTool.enabled })
+            }
+            if (strategies.extractTool.protectedTools !== undefined && !Array.isArray(strategies.extractTool.protectedTools)) {
+                errors.push({ key: 'strategies.extractTool.protectedTools', expected: 'string[]', actual: typeof strategies.extractTool.protectedTools })
+            }
+            if (strategies.extractTool.turnProtection) {
+                if (strategies.extractTool.turnProtection.enabled !== undefined && typeof strategies.extractTool.turnProtection.enabled !== 'boolean') {
+                    errors.push({ key: 'strategies.extractTool.turnProtection.enabled', expected: 'boolean', actual: typeof strategies.extractTool.turnProtection.enabled })
+                }
+                if (strategies.extractTool.turnProtection.turns !== undefined && typeof strategies.extractTool.turnProtection.turns !== 'number') {
+                    errors.push({ key: 'strategies.extractTool.turnProtection.turns', expected: 'number', actual: typeof strategies.extractTool.turnProtection.turns })
+                }
+            }
+            if (strategies.extractTool.nudge) {
+                if (strategies.extractTool.nudge.enabled !== undefined && typeof strategies.extractTool.nudge.enabled !== 'boolean') {
+                    errors.push({ key: 'strategies.extractTool.nudge.enabled', expected: 'boolean', actual: typeof strategies.extractTool.nudge.enabled })
+                }
+                if (strategies.extractTool.nudge.frequency !== undefined && typeof strategies.extractTool.nudge.frequency !== 'number') {
+                    errors.push({ key: 'strategies.extractTool.nudge.frequency', expected: 'number', actual: typeof strategies.extractTool.nudge.frequency })
+                }
+            }
+            if (strategies.extractTool.showDistillation !== undefined && typeof strategies.extractTool.showDistillation !== 'boolean') {
+                errors.push({ key: 'strategies.extractTool.showDistillation', expected: 'boolean', actual: typeof strategies.extractTool.showDistillation })
             }
         }
 
@@ -254,7 +310,7 @@ const defaultConfig: PluginConfig = {
         supersedeWrites: {
             enabled: true
         },
-        pruneTool: {
+        discardTool: {
             enabled: true,
             protectedTools: [...DEFAULT_PROTECTED_TOOLS],
             turnProtection: {
@@ -265,6 +321,19 @@ const defaultConfig: PluginConfig = {
                 enabled: true,
                 frequency: 10
             }
+        },
+        extractTool: {
+            enabled: true,
+            protectedTools: [...DEFAULT_PROTECTED_TOOLS],
+            turnProtection: {
+                enabled: false,
+                turns: 4
+            },
+            nudge: {
+                enabled: true,
+                frequency: 10
+            },
+            showDistillation: false
         },
         onIdle: {
             enabled: false,
@@ -357,21 +426,39 @@ function createDefaultConfig(): void {
     "supersedeWrites": {
       "enabled": true
     },
-    // Exposes a prune tool to your LLM to call when it determines pruning is necessary
-    \"pruneTool\": {
-      \"enabled\": true,
+    // Removes tool content from context without preservation (for completed tasks or noise)
+    "discardTool": {
+      "enabled": true,
       // Additional tools to protect from pruning
-      \"protectedTools\": [],
+      "protectedTools": [],
       // Protect from pruning for <turn protection> message turns
-      \"turnProtection\": {
-        \"enabled\": false,
-        \"turns\": 4
+      "turnProtection": {
+        "enabled": false,
+        "turns": 4
       },
-      // Nudge the LLM to use the prune tool (every <frequency> tool results)
-      \"nudge\": {
+      // Nudge the LLM to use the discard tool (every <frequency> tool results)
+      "nudge": {
         "enabled": true,
         "frequency": 10
       }
+    },
+    // Distills key findings into preserved knowledge before removing raw content
+    "extractTool": {
+      "enabled": true,
+      // Additional tools to protect from pruning
+      "protectedTools": [],
+      // Protect from pruning for <turn protection> message turns
+      "turnProtection": {
+        "enabled": false,
+        "turns": 4
+      },
+      // Nudge the LLM to use the extract tool (every <frequency> tool results)
+      "nudge": {
+        "enabled": true,
+        "frequency": 10
+      },
+      // Show distillation content as an ignored message notification
+      "showDistillation": false
     },
     // (Legacy) Run an LLM to analyze what tool calls are no longer relevant on idle
     "onIdle": {
@@ -444,22 +531,40 @@ function mergeStrategies(
                 ])
             ]
         },
-        pruneTool: {
-            enabled: override.pruneTool?.enabled ?? base.pruneTool.enabled,
+        discardTool: {
+            enabled: override.discardTool?.enabled ?? base.discardTool.enabled,
             protectedTools: [
                 ...new Set([
-                    ...base.pruneTool.protectedTools,
-                    ...(override.pruneTool?.protectedTools ?? [])
+                    ...base.discardTool.protectedTools,
+                    ...(override.discardTool?.protectedTools ?? [])
                 ])
             ],
             turnProtection: {
-                enabled: override.pruneTool?.turnProtection?.enabled ?? base.pruneTool.turnProtection.enabled,
-                turns: override.pruneTool?.turnProtection?.turns ?? base.pruneTool.turnProtection.turns
+                enabled: override.discardTool?.turnProtection?.enabled ?? base.discardTool.turnProtection.enabled,
+                turns: override.discardTool?.turnProtection?.turns ?? base.discardTool.turnProtection.turns
             },
             nudge: {
-                enabled: override.pruneTool?.nudge?.enabled ?? base.pruneTool.nudge.enabled,
-                frequency: override.pruneTool?.nudge?.frequency ?? base.pruneTool.nudge.frequency
+                enabled: override.discardTool?.nudge?.enabled ?? base.discardTool.nudge.enabled,
+                frequency: override.discardTool?.nudge?.frequency ?? base.discardTool.nudge.frequency
             }
+        },
+        extractTool: {
+            enabled: override.extractTool?.enabled ?? base.extractTool.enabled,
+            protectedTools: [
+                ...new Set([
+                    ...base.extractTool.protectedTools,
+                    ...(override.extractTool?.protectedTools ?? [])
+                ])
+            ],
+            turnProtection: {
+                enabled: override.extractTool?.turnProtection?.enabled ?? base.extractTool.turnProtection.enabled,
+                turns: override.extractTool?.turnProtection?.turns ?? base.extractTool.turnProtection.turns
+            },
+            nudge: {
+                enabled: override.extractTool?.nudge?.enabled ?? base.extractTool.nudge.enabled,
+                frequency: override.extractTool?.nudge?.frequency ?? base.extractTool.nudge.frequency
+            },
+            showDistillation: override.extractTool?.showDistillation ?? base.extractTool.showDistillation
         },
         supersedeWrites: {
             enabled: override.supersedeWrites?.enabled ?? base.supersedeWrites.enabled
@@ -479,11 +584,18 @@ function deepCloneConfig(config: PluginConfig): PluginConfig {
                 ...config.strategies.onIdle,
                 protectedTools: [...config.strategies.onIdle.protectedTools]
             },
-            pruneTool: {
-                ...config.strategies.pruneTool,
-                protectedTools: [...config.strategies.pruneTool.protectedTools],
-                turnProtection: { ...config.strategies.pruneTool.turnProtection },
-                nudge: { ...config.strategies.pruneTool.nudge }
+            discardTool: {
+                ...config.strategies.discardTool,
+                protectedTools: [...config.strategies.discardTool.protectedTools],
+                turnProtection: { ...config.strategies.discardTool.turnProtection },
+                nudge: { ...config.strategies.discardTool.nudge }
+            },
+            extractTool: {
+                ...config.strategies.extractTool,
+                protectedTools: [...config.strategies.extractTool.protectedTools],
+                turnProtection: { ...config.strategies.extractTool.turnProtection },
+                nudge: { ...config.strategies.extractTool.nudge },
+                showDistillation: config.strategies.extractTool.showDistillation
             },
             supersedeWrites: {
                 ...config.strategies.supersedeWrites

@@ -82,6 +82,37 @@ export async function sendUnifiedNotification(
     return true
 }
 
+function formatDistillationMessage(distillation: Record<string, any>): string {
+    const lines: string[] = ['▣ DCP | Extracted Distillation']
+
+    for (const [id, findings] of Object.entries(distillation)) {
+        lines.push(`\n─── ID ${id} ───`)
+        if (typeof findings === 'object' && findings !== null) {
+            lines.push(JSON.stringify(findings, null, 2))
+        } else {
+            lines.push(String(findings))
+        }
+    }
+
+    return lines.join('\n')
+}
+
+export async function sendDistillationNotification(
+    client: any,
+    logger: Logger,
+    sessionId: string,
+    distillation: Record<string, any>,
+    params: any
+): Promise<boolean> {
+    if (!distillation || Object.keys(distillation).length === 0) {
+        return false
+    }
+
+    const message = formatDistillationMessage(distillation)
+    await sendIgnoredMessage(client, sessionId, message, params, logger)
+    return true
+}
+
 export async function sendIgnoredMessage(
     client: any,
     sessionID: string,

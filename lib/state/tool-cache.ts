@@ -35,16 +35,27 @@ export async function syncToolCache(
                     continue
                 }
 
-                const isProtectedByTurn = config.strategies.pruneTool.turnProtection.enabled &&
-                    config.strategies.pruneTool.turnProtection.turns > 0 &&
-                    (state.currentTurn - turnCounter) < config.strategies.pruneTool.turnProtection.turns
+                const turnProtectionEnabled = config.strategies.discardTool.turnProtection.enabled || 
+                    config.strategies.extractTool.turnProtection.enabled
+                const turnProtectionTurns = Math.max(
+                    config.strategies.discardTool.turnProtection.turns,
+                    config.strategies.extractTool.turnProtection.turns
+                )
+                const isProtectedByTurn = turnProtectionEnabled &&
+                    turnProtectionTurns > 0 &&
+                    (state.currentTurn - turnCounter) < turnProtectionTurns
 
-                state.lastToolPrune = part.tool === "prune"
+                state.lastToolPrune = part.tool === "discard" || part.tool === "extract"
 
-                if (part.tool === "prune") {
+                const allProtectedTools = [
+                    ...config.strategies.discardTool.protectedTools,
+                    ...config.strategies.extractTool.protectedTools
+                ]
+
+                if (part.tool === "discard" || part.tool === "extract") {
                     state.nudgeCounter = 0
                 } else if (
-                    !config.strategies.pruneTool.protectedTools.includes(part.tool) &&
+                    !allProtectedTools.includes(part.tool) &&
                     !isProtectedByTurn
                 ) {
                     state.nudgeCounter++

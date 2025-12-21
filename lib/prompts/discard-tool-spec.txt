@@ -1,0 +1,56 @@
+Discards tool outputs from context to manage conversation size and reduce noise.
+
+## IMPORTANT: The Prunable List
+A `<prunable-tools>` list is injected into user messages showing available tool outputs you can discard when there are tools available for pruning. Each line has the format `ID: tool, parameter` (e.g., `20: read, /path/to/file.ts`). You MUST only use numeric IDs that appear in this list to select which tools to discard.
+
+**Note:** For `write` and `edit` tools, discarding removes the input content (the code being written/edited) while preserving the output confirmation. This is useful after completing a file modification when you no longer need the raw content in context.
+
+## When to Use This Tool
+
+Use `discard` for removing tool outputs that are no longer needed **without preserving their content**:
+
+### 1. Task Completion (Clean Up)
+**When:** You have successfully completed a specific unit of work (e.g., fixed a bug, wrote a file, answered a question).
+**Action:** Discard the tools used for that task with reason `completion`.
+
+### 2. Removing Noise (Garbage Collection)
+**When:** You have read files or run commands that turned out to be irrelevant, unhelpful, or outdated (meaning later tools have provided fresher, more valid information).
+**Action:** Discard these specific tool outputs immediately with reason `noise`.
+
+## When NOT to Use This Tool
+
+- **If you need to preserve information:** Keep the raw output in context rather than discarding it.
+- **If you'll need the output later:** Don't discard files you plan to edit, or context you'll need for implementation.
+
+## Best Practices
+- **Strategic Batching:** Don't discard single small tool outputs (like short bash commands) unless they are pure noise. Wait until you have several items to perform high-impact discards.
+- **Think ahead:** Before discarding, ask: "Will I need this output for an upcoming task?" If yes, keep it.
+
+## Format
+The `ids` parameter is an array where the first element is the reason, followed by numeric IDs:
+`ids: ["reason", "id1", "id2", ...]`
+
+## Examples
+
+<example_noise>
+Assistant: [Reads 'wrong_file.ts']
+This file isn't relevant to the auth system. I'll remove it to clear the context.
+[Uses discard with ids: ["noise", "5"]]
+</example_noise>
+
+<example_completion>
+Assistant: [Runs tests, they pass]
+The tests passed. I'll clean up now.
+[Uses discard with ids: ["completion", "20", "21"]]
+</example_completion>
+
+<example_keep>
+Assistant: [Reads 'auth.ts' to understand the login flow]
+I've understood the auth flow. I'll need to modify this file to add the new validation, so I'm keeping this read in context rather than discarding.
+</example_keep>
+
+<example_edit_completion>
+Assistant: [Edits 'auth.ts' to add validation]
+The edit was successful. I no longer need the raw edit content in context.
+[Uses discard with ids: ["completion", "15"]]
+</example_edit_completion>

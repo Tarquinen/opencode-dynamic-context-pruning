@@ -1,0 +1,79 @@
+Extracts key findings from tool outputs into distilled knowledge, then removes the raw outputs from context.
+
+## IMPORTANT: The Prunable List
+A `<prunable-tools>` list is injected into user messages showing available tool outputs you can extract from when there are tools available for pruning. Each line has the format `ID: tool, parameter` (e.g., `20: read, /path/to/file.ts`). You MUST only use numeric IDs that appear in this list to select which tools to extract.
+
+## When to Use This Tool
+
+Use `extract` when you have gathered useful information that you want to **preserve in distilled form** before removing the raw outputs:
+
+### 1. Task Completion
+**When:** You have completed a unit of work and want to preserve key findings.
+**Action:** Extract with distillation scaled to the value of the content. High-value insights require comprehensive capture; routine completions can use lighter distillation.
+
+### 2. Knowledge Preservation
+**When:** You have read files, run commands, or gathered context that contains valuable information you'll need to reference later, but the full raw output is too large to keep.
+**Action:** Convert raw data into distilled knowledge. This allows you to remove large outputs (like full file reads) while keeping only the specific parts you need (like a single function signature or constant).
+
+## CRITICAL: Distillation Requirements
+
+You MUST provide distilled findings in the `distillation` parameter. This is not optional.
+
+- **Comprehensive Capture:** Distillation is not just a summary. It must be a high-fidelity representation of the technical details. If you read a file, the distillation should include function signatures, specific logic flows, constant values, and any constraints or edge cases discovered.
+- **Task-Relevant Verbosity:** Be as verbose as necessary to ensure that the "distilled" version is a complete substitute for the raw output for the task at hand. If you will need to reference a specific algorithm or interface later, include it in its entirety within the distillation.
+- **Extract Per-ID:** When extracting from multiple tools, your `distillation` object MUST contain a corresponding entry for EVERY ID being extracted. You must capture high-fidelity findings for each tool individually to ensure no signal is lost.
+- **Structure:** Map EVERY `ID` from the `ids` array to its specific distilled findings.
+  Example: `{ "20": { ... }, "21": { ... } }`
+- Capture all relevant details (function names, logic, constraints) to ensure no signal is lost.
+- Prioritize information that is essential for the immediate next steps of your plan.
+
+## When NOT to Use This Tool
+
+- **If you need precise syntax:** If you'll need to edit a file, grep for exact strings, or reference precise syntax, keep the raw output. Distillation works for understanding; implementation often requires the original.
+- **If uncertain:** Prefer keeping over re-fetching. The cost of retaining context is lower than the cost of redundant tool calls.
+
+## Best Practices
+- **Technical Fidelity:** Ensure that types, parameters, and return values are preserved if they are relevant to upcoming implementation steps.
+- **Strategic Batching:** Wait until you have several items or a few large outputs to extract, rather than doing tiny, frequent extractions. Aim for high-impact extractions that significantly reduce context size.
+- **Think ahead:** Before extracting, ask: "Will I need the raw output for an upcoming task?" If you researched a file you'll later edit, do NOT extract it.
+
+## Format
+The `ids` parameter is an array of numeric IDs as strings:
+`ids: ["id1", "id2", ...]`
+
+The `distillation` parameter is an object mapping each ID to its distilled findings:
+`distillation: { "id1": { ...findings... }, "id2": { ...findings... } }`
+
+## Example
+
+<example_extraction>
+Assistant: [Reads service implementation, types, and config]
+I'll preserve the full technical specification and implementation logic before extracting.
+[Uses extract with ids: ["10", "11", "12"], distillation: {
+  "10": {
+    "file": "src/services/auth.ts",
+    "signatures": [
+      "async function validateToken(token: string): Promise<User | null>",
+      "function hashPassword(password: string): string"
+    ],
+    "logic": "The validateToken function first checks the local cache before calling the external OIDC provider. It uses a 5-minute TTL for cached tokens.",
+    "dependencies": ["import { cache } from '../utils/cache'", "import { oidc } from '../config'"],
+    "constraints": "Tokens must be at least 128 chars long. hashPassword uses bcrypt with 12 rounds."
+  },
+  "11": {
+    "file": "src/types/user.ts",
+    "interface": "interface User { id: string; email: string; permissions: ('read' | 'write' | 'admin')[]; status: 'active' | 'suspended'; }",
+    "context": "The permissions array is strictly typed and used by the RBAC middleware."
+  },
+  "12": {
+    "file": "config/default.json",
+    "values": { "PORT": 3000, "RETRY_STRATEGY": "exponential", "MAX_ATTEMPTS": 5 },
+    "impact": "The retry strategy affects all outgoing HTTP clients in the core module."
+  }
+}]
+</example_extraction>
+
+<example_keep>
+Assistant: [Reads 'auth.ts' to understand the login flow]
+I've understood the auth flow. I'll need to modify this file to add the new validation, so I'm keeping this read in context rather than extracting.
+</example_keep>
