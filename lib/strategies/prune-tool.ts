@@ -50,6 +50,17 @@ export function createPruneTool(
             logger.info("Prune tool invoked")
             logger.info(JSON.stringify(args))
 
+            // Check if prune tool is disabled for current provider
+            const effectiveConfig = state.provider.effectiveConfig
+            if (effectiveConfig && !effectiveConfig.enabled) {
+                logger.info("Prune tool disabled for provider", { provider: state.provider.providerID })
+                return `DCP is disabled for ${state.provider.providerID}. Pruning is not available.`
+            }
+            if (effectiveConfig && !effectiveConfig.strategies.pruneTool) {
+                logger.info("Prune tool strategy disabled for provider", { provider: state.provider.providerID })
+                return `Prune tool is disabled for ${state.provider.providerID}. Pruning is not available.`
+            }
+
             if (!args.ids || args.ids.length === 0) {
                 logger.debug("Prune tool called but args.ids is empty or undefined: " + JSON.stringify(args))
                 return "No IDs provided. Check the <prunable-tools> list for available IDs to prune."

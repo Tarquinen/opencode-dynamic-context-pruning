@@ -1,4 +1,5 @@
 import { Message, Part } from "@opencode-ai/sdk"
+import type { EffectiveProviderConfig } from "../config"
 
 export interface WithParts {
     info: Message
@@ -24,6 +25,13 @@ export interface Prune {
     toolIds: string[]
 }
 
+export interface ProviderState {
+    providerID: string | null
+    modelID: string | null
+    effectiveConfig: EffectiveProviderConfig | null
+    lastNotifiedProvider: string | null
+}
+
 export interface SessionState {
     sessionId: string | null
     isSubAgent: boolean
@@ -34,4 +42,5 @@ export interface SessionState {
     lastToolPrune: boolean
     lastCompaction: number
     currentTurn: number  // Current turn count derived from step-start parts
+    provider: ProviderState
 }

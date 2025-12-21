@@ -53,7 +53,13 @@ export function createSessionState(): SessionState {
         nudgeCounter: 0,
         lastToolPrune: false,
         lastCompaction: 0,
-        currentTurn: 0
+        currentTurn: 0,
+        provider: {
+            providerID: null,
+            modelID: null,
+            effectiveConfig: null,
+            lastNotifiedProvider: null
+        }
     }
 }
 
@@ -72,6 +78,12 @@ export function resetSessionState(state: SessionState): void {
     state.lastToolPrune = false
     state.lastCompaction = 0
     state.currentTurn = 0
+    state.provider = {
+        providerID: null,
+        modelID: null,
+        effectiveConfig: null,
+        lastNotifiedProvider: null
+    }
 }
 
 export async function ensureSessionInitialized(

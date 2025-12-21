@@ -4,7 +4,7 @@ import { Logger } from "./lib/logger"
 import { loadPrompt } from "./lib/prompt"
 import { createSessionState } from "./lib/state"
 import { createPruneTool } from "./lib/strategies"
-import { createChatMessageTransformHandler, createEventHandler } from "./lib/hooks"
+import { createChatMessageTransformHandler, createChatParamsHandler, createEventHandler } from "./lib/hooks"
 
 const plugin: Plugin = (async (ctx) => {
     const config = getConfig(ctx)
@@ -25,10 +25,16 @@ const plugin: Plugin = (async (ctx) => {
     // Log initialization
     logger.info("DCP initialized", {
         strategies: config.strategies,
+        overrides: config.overrides
     })
 
     return {
+        "chat.params": createChatParamsHandler(ctx.client, state, logger, config),
         "experimental.chat.system.transform": async (_input: unknown, output: { system: string[] }) => {
+            // Skip system prompt injection if DCP is disabled for current provider
+            if (state.provider.effectiveConfig && !state.provider.effectiveConfig.enabled) {
+                return
+            }
             const syntheticPrompt = loadPrompt("prune-system-prompt")
             output.system.push(syntheticPrompt)
         },
