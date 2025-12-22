@@ -6,7 +6,7 @@ import type { SessionState, WithParts } from "../state"
  * Extracts a human-readable key from tool metadata for display purposes.
  */
 export const extractParameterKey = (tool: string, parameters: any): string => {
-    if (!parameters) return ''
+    if (!parameters) return ""
 
     if (tool === "read" && parameters.filePath) {
         return parameters.filePath
@@ -19,21 +19,21 @@ export const extractParameterKey = (tool: string, parameters: any): string => {
     }
 
     if (tool === "list") {
-        return parameters.path || '(current directory)'
+        return parameters.path || "(current directory)"
     }
     if (tool === "glob") {
         if (parameters.pattern) {
             const pathInfo = parameters.path ? ` in ${parameters.path}` : ""
             return `"${parameters.pattern}"${pathInfo}`
         }
-        return '(unknown pattern)'
+        return "(unknown pattern)"
     }
     if (tool === "grep") {
         if (parameters.pattern) {
             const pathInfo = parameters.path ? ` in ${parameters.path}` : ""
             return `"${parameters.pattern}"${pathInfo}`
         }
-        return '(unknown pattern)'
+        return "(unknown pattern)"
     }
 
     if (tool === "bash") {
@@ -67,8 +67,8 @@ export const extractParameterKey = (tool: string, parameters: any): string => {
     }
 
     const paramStr = JSON.stringify(parameters)
-    if (paramStr === '{}' || paramStr === '[]' || paramStr === 'null') {
-        return ''
+    if (paramStr === "{}" || paramStr === "[]" || paramStr === "null") {
+        return ""
     }
     return paramStr.substring(0, 50)
 }
@@ -76,7 +76,7 @@ export const extractParameterKey = (tool: string, parameters: any): string => {
 export function buildToolIdList(
     state: SessionState,
     messages: WithParts[],
-    logger: Logger
+    logger: Logger,
 ): string[] {
     const toolIds: string[] = []
     for (const msg of messages) {
@@ -85,7 +85,7 @@ export function buildToolIdList(
         }
         if (msg.parts) {
             for (const part of msg.parts) {
-                if (part.type === 'tool' && part.callID && part.tool) {
+                if (part.type === "tool" && part.callID && part.tool) {
                     toolIds.push(part.callID)
                 }
             }

@@ -8,28 +8,20 @@ export type PruneReason = "completion" | "noise" | "consolidation"
 export const PRUNE_REASON_LABELS: Record<PruneReason, string> = {
     completion: "Task Complete",
     noise: "Noise Removal",
-    consolidation: "Consolidation"
+    consolidation: "Consolidation",
 }
 
-function formatStatsHeader(
-    totalTokensSaved: number,
-    pruneTokenCounter: number
-): string {
+function formatStatsHeader(totalTokensSaved: number, pruneTokenCounter: number): string {
     const totalTokensSavedStr = `~${formatTokenCount(totalTokensSaved + pruneTokenCounter)}`
-    return [
-        `▣ DCP | ${totalTokensSavedStr} saved total`,
-    ].join('\n')
+    return [`▣ DCP | ${totalTokensSavedStr} saved total`].join("\n")
 }
 
-function buildMinimalMessage(
-    state: SessionState,
-    reason: PruneReason | undefined
-): string {
-    const reasonSuffix = reason ? ` [${PRUNE_REASON_LABELS[reason]}]` : ''
-    return formatStatsHeader(
-        state.stats.totalPruneTokens,
-        state.stats.pruneTokenCounter
-    ) + reasonSuffix
+function buildMinimalMessage(state: SessionState, reason: PruneReason | undefined): string {
+    const reasonSuffix = reason ? ` [${PRUNE_REASON_LABELS[reason]}]` : ""
+    return (
+        formatStatsHeader(state.stats.totalPruneTokens, state.stats.pruneTokenCounter) +
+        reasonSuffix
+    )
 }
 
 function buildDetailedMessage(
@@ -37,17 +29,17 @@ function buildDetailedMessage(
     reason: PruneReason | undefined,
     pruneToolIds: string[],
     toolMetadata: Map<string, ToolParameterEntry>,
-    workingDirectory?: string
+    workingDirectory?: string,
 ): string {
     let message = formatStatsHeader(state.stats.totalPruneTokens, state.stats.pruneTokenCounter)
 
     if (pruneToolIds.length > 0) {
         const pruneTokenCounterStr = `~${formatTokenCount(state.stats.pruneTokenCounter)}`
-        const reasonLabel = reason ? ` — ${PRUNE_REASON_LABELS[reason]}` : ''
+        const reasonLabel = reason ? ` — ${PRUNE_REASON_LABELS[reason]}` : ""
         message += `\n\n▣ Pruning (${pruneTokenCounterStr})${reasonLabel}`
 
         const itemLines = formatPrunedItemsList(pruneToolIds, toolMetadata, workingDirectory)
-        message += '\n' + itemLines.join('\n')
+        message += "\n" + itemLines.join("\n")
     }
 
     return message.trim()
@@ -63,38 +55,39 @@ export async function sendUnifiedNotification(
     toolMetadata: Map<string, ToolParameterEntry>,
     reason: PruneReason | undefined,
     params: any,
-    workingDirectory: string
+    workingDirectory: string,
 ): Promise<boolean> {
     const hasPruned = pruneToolIds.length > 0
     if (!hasPruned) {
         return false
     }
 
-    if (config.pruneNotification === 'off') {
+    if (config.pruneNotification === "off") {
         return false
     }
 
-    const message = config.pruneNotification === 'minimal'
-        ? buildMinimalMessage(state, reason)
-        : buildDetailedMessage(state, reason, pruneToolIds, toolMetadata, workingDirectory)
+    const message =
+        config.pruneNotification === "minimal"
+            ? buildMinimalMessage(state, reason)
+            : buildDetailedMessage(state, reason, pruneToolIds, toolMetadata, workingDirectory)
 
     await sendIgnoredMessage(client, sessionId, message, params, logger)
     return true
 }
 
 function formatDistillationMessage(distillation: Record<string, any>): string {
-    const lines: string[] = ['▣ DCP | Extracted Distillation']
+    const lines: string[] = ["▣ DCP | Extracted Distillation"]
 
     for (const [id, findings] of Object.entries(distillation)) {
         lines.push(`\n─── ID ${id} ───`)
-        if (typeof findings === 'object' && findings !== null) {
+        if (typeof findings === "object" && findings !== null) {
             lines.push(JSON.stringify(findings, null, 2))
         } else {
             lines.push(String(findings))
         }
     }
 
-    return lines.join('\n')
+    return lines.join("\n")
 }
 
 export async function sendDistillationNotification(
@@ -102,7 +95,7 @@ export async function sendDistillationNotification(
     logger: Logger,
     sessionId: string,
     distillation: Record<string, any>,
-    params: any
+    params: any,
 ): Promise<boolean> {
     if (!distillation || Object.keys(distillation).length === 0) {
         return false
@@ -118,32 +111,36 @@ export async function sendIgnoredMessage(
     sessionID: string,
     text: string,
     params: any,
-    logger: Logger
+    logger: Logger,
 ): Promise<void> {
     const agent = params.agent || undefined
-    const model = params.providerId && params.modelId ? {
-        providerID: params.providerId,
-        modelID: params.modelId
-    } : undefined
+    const model =
+        params.providerId && params.modelId
+            ? {
+                  providerID: params.providerId,
+                  modelID: params.modelId,
+              }
+            : undefined
 
     try {
         await client.session.prompt({
             path: {
-                id: sessionID
+                id: sessionID,
             },
             body: {
                 noReply: true,
                 agent: agent,
                 model: model,
-                parts: [{
-                    type: 'text',
-                    text: text,
-                    ignored: true
-                }]
-            }
+                parts: [
+                    {
+                        type: "text",
+                        text: text,
+                        ignored: true,
+                    },
+                ],
+            },
         })
     } catch (error: any) {
         logger.error("Failed to send notification", { error: error.message })
     }
 }
-

@@ -8,9 +8,8 @@ export const checkSession = async (
     client: any,
     state: SessionState,
     logger: Logger,
-    messages: WithParts[]
+    messages: WithParts[],
 ): Promise<void> => {
-
     const lastUserMessage = getLastUserMessage(messages)
     if (!lastUserMessage) {
         return
@@ -32,7 +31,9 @@ export const checkSession = async (
         state.lastCompaction = lastCompactionTimestamp
         state.toolParameters.clear()
         state.prune.toolIds = []
-        logger.info("Detected compaction from messages - cleared tool cache", { timestamp: lastCompactionTimestamp })
+        logger.info("Detected compaction from messages - cleared tool cache", {
+            timestamp: lastCompactionTimestamp,
+        })
     }
 
     state.currentTurn = countTurns(state, messages)
@@ -43,7 +44,7 @@ export function createSessionState(): SessionState {
         sessionId: null,
         isSubAgent: false,
         prune: {
-            toolIds: []
+            toolIds: [],
         },
         stats: {
             pruneTokenCounter: 0,
@@ -53,7 +54,7 @@ export function createSessionState(): SessionState {
         nudgeCounter: 0,
         lastToolPrune: false,
         lastCompaction: 0,
-        currentTurn: 0
+        currentTurn: 0,
     }
 }
 
@@ -61,7 +62,7 @@ export function resetSessionState(state: SessionState): void {
     state.sessionId = null
     state.isSubAgent = false
     state.prune = {
-        toolIds: []
+        toolIds: [],
     }
     state.stats = {
         pruneTokenCounter: 0,
@@ -79,10 +80,10 @@ export async function ensureSessionInitialized(
     state: SessionState,
     sessionId: string,
     logger: Logger,
-    messages: WithParts[]
+    messages: WithParts[],
 ): Promise<void> {
     if (state.sessionId === sessionId) {
-        return;
+        return
     }
 
     logger.info("session ID = " + sessionId)
@@ -100,11 +101,11 @@ export async function ensureSessionInitialized(
 
     const persisted = await loadSessionState(sessionId, logger)
     if (persisted === null) {
-        return;
+        return
     }
 
     state.prune = {
-        toolIds: persisted.prune.toolIds || []
+        toolIds: persisted.prune.toolIds || [],
     }
     state.stats = {
         pruneTokenCounter: persisted.stats?.pruneTokenCounter || 0,

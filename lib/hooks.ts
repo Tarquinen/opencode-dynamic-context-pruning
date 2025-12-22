@@ -7,24 +7,20 @@ import { prune, insertPruneToolContext } from "./messages"
 import { checkSession } from "./state"
 import { runOnIdle } from "./strategies/on-idle"
 
-
 export function createChatMessageTransformHandler(
     client: any,
     state: SessionState,
     logger: Logger,
-    config: PluginConfig
+    config: PluginConfig,
 ) {
-    return async (
-        input: {},
-        output: { messages: WithParts[] }
-    ) => {
+    return async (input: {}, output: { messages: WithParts[] }) => {
         await checkSession(client, state, logger, output.messages)
 
         if (state.isSubAgent) {
             return
         }
 
-        syncToolCache(state, config, logger, output.messages);
+        syncToolCache(state, config, logger, output.messages)
 
         deduplicate(state, logger, config, output.messages)
         supersedeWrites(state, logger, config, output.messages)
@@ -40,11 +36,9 @@ export function createEventHandler(
     config: PluginConfig,
     state: SessionState,
     logger: Logger,
-    workingDirectory?: string
+    workingDirectory?: string,
 ) {
-    return async (
-        { event }: { event: any }
-    ) => {
+    return async ({ event }: { event: any }) => {
         if (state.sessionId === null || state.isSubAgent) {
             return
         }
@@ -59,13 +53,7 @@ export function createEventHandler(
             }
 
             try {
-                await runOnIdle(
-                    client,
-                    state,
-                    logger,
-                    config,
-                    workingDirectory
-                )
+                await runOnIdle(client, state, logger, config, workingDirectory)
             } catch (err: any) {
                 logger.error("OnIdle pruning failed", { error: err.message })
             }

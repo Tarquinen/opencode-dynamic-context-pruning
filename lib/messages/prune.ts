@@ -6,8 +6,9 @@ import { extractParameterKey, buildToolIdList } from "./utils"
 import { getLastUserMessage, isMessageCompacted } from "../shared-utils"
 import { UserMessage } from "@opencode-ai/sdk"
 
-const PRUNED_TOOL_INPUT_REPLACEMENT = '[Input removed to save context]'
-const PRUNED_TOOL_OUTPUT_REPLACEMENT = '[Output removed to save context - information superseded or no longer needed]'
+const PRUNED_TOOL_INPUT_REPLACEMENT = "[Input removed to save context]"
+const PRUNED_TOOL_OUTPUT_REPLACEMENT =
+    "[Output removed to save context - information superseded or no longer needed]"
 const getNudgeString = (config: PluginConfig): string => {
     const discardEnabled = config.tools.discard.enabled
     const extractEnabled = config.tools.extract.enabled
@@ -67,27 +68,34 @@ const buildPrunableToolsList = (
         }
         const numericId = toolIdList.indexOf(toolCallId)
         if (numericId === -1) {
-            logger.warn(`Tool in cache but not in toolIdList - possible stale entry`, { toolCallId, tool: toolParameterEntry.tool })
+            logger.warn(`Tool in cache but not in toolIdList - possible stale entry`, {
+                toolCallId,
+                tool: toolParameterEntry.tool,
+            })
             return
         }
         const paramKey = extractParameterKey(toolParameterEntry.tool, toolParameterEntry.parameters)
-        const description = paramKey ? `${toolParameterEntry.tool}, ${paramKey}` : toolParameterEntry.tool
+        const description = paramKey
+            ? `${toolParameterEntry.tool}, ${paramKey}`
+            : toolParameterEntry.tool
         lines.push(`${numericId}: ${description}`)
-        logger.debug(`Prunable tool found - ID: ${numericId}, Tool: ${toolParameterEntry.tool}, Call ID: ${toolCallId}`)
+        logger.debug(
+            `Prunable tool found - ID: ${numericId}, Tool: ${toolParameterEntry.tool}, Call ID: ${toolCallId}`,
+        )
     })
 
     if (lines.length === 0) {
         return ""
     }
 
-    return wrapPrunableTools(lines.join('\n'))
+    return wrapPrunableTools(lines.join("\n"))
 }
 
 export const insertPruneToolContext = (
     state: SessionState,
     config: PluginConfig,
     logger: Logger,
-    messages: WithParts[]
+    messages: WithParts[],
 ): void => {
     if (!config.tools.discard.enabled && !config.tools.extract.enabled) {
         return
@@ -112,7 +120,10 @@ export const insertPruneToolContext = (
         logger.debug("prunable-tools: \n" + prunableToolsList)
 
         let nudgeString = ""
-        if (config.tools.settings.nudgeEnabled && state.nudgeCounter >= config.tools.settings.nudgeFrequency) {
+        if (
+            config.tools.settings.nudgeEnabled &&
+            state.nudgeCounter >= config.tools.settings.nudgeFrequency
+        ) {
             logger.info("Inserting prune nudge message")
             nudgeString = "\n" + getNudgeString(config)
         }
@@ -129,8 +140,8 @@ export const insertPruneToolContext = (
             agent: (lastUserMessage.info as UserMessage).agent || "build",
             model: {
                 providerID: (lastUserMessage.info as UserMessage).model.providerID,
-                modelID: (lastUserMessage.info as UserMessage).model.modelID
-            }
+                modelID: (lastUserMessage.info as UserMessage).model.modelID,
+            },
         },
         parts: [
             {
@@ -139,8 +150,8 @@ export const insertPruneToolContext = (
                 messageID: SYNTHETIC_MESSAGE_ID,
                 type: "text",
                 text: prunableToolsContent,
-            }
-        ]
+            },
+        ],
     }
 
     messages.push(userMessage)
@@ -150,55 +161,47 @@ export const prune = (
     state: SessionState,
     logger: Logger,
     config: PluginConfig,
-    messages: WithParts[]
+    messages: WithParts[],
 ): void => {
     pruneToolOutputs(state, logger, messages)
     pruneToolInputs(state, logger, messages)
 }
 
-const pruneToolOutputs = (
-    state: SessionState,
-    logger: Logger,
-    messages: WithParts[]
-): void => {
+const pruneToolOutputs = (state: SessionState, logger: Logger, messages: WithParts[]): void => {
     for (const msg of messages) {
         if (isMessageCompacted(state, msg)) {
             continue
         }
 
         for (const part of msg.parts) {
-            if (part.type !== 'tool') {
+            if (part.type !== "tool") {
                 continue
             }
             if (!state.prune.toolIds.includes(part.callID)) {
                 continue
             }
             // Skip write and edit tools - their inputs are pruned instead
-            if (part.tool === 'write' || part.tool === 'edit') {
+            if (part.tool === "write" || part.tool === "edit") {
                 continue
             }
-            if (part.state.status === 'completed') {
+            if (part.state.status === "completed") {
                 part.state.output = PRUNED_TOOL_OUTPUT_REPLACEMENT
             }
         }
     }
 }
 
-const pruneToolInputs = (
-    state: SessionState,
-    logger: Logger,
-    messages: WithParts[]
-): void => {
+const pruneToolInputs = (state: SessionState, logger: Logger, messages: WithParts[]): void => {
     for (const msg of messages) {
         for (const part of msg.parts) {
-            if (part.type !== 'tool') {
+            if (part.type !== "tool") {
                 continue
             }
             if (!state.prune.toolIds.includes(part.callID)) {
                 continue
             }
             // Only prune inputs for write and edit tools
-            if (part.tool !== 'write' && part.tool !== 'edit') {
+            if (part.tool !== "write" && part.tool !== "edit") {
                 continue
             }
             // Don't prune yet if tool is still pending or running
@@ -207,10 +210,10 @@ const pruneToolInputs = (
             }
 
             // Write tool has content field, edit tool has oldString/newString fields
-            if (part.tool === 'write' && part.state.input?.content !== undefined) {
+            if (part.tool === "write" && part.state.input?.content !== undefined) {
                 part.state.input.content = PRUNED_TOOL_INPUT_REPLACEMENT
             }
-            if (part.tool === 'edit') {
+            if (part.tool === "edit") {
                 if (part.state.input?.oldString !== undefined) {
                     part.state.input.oldString = PRUNED_TOOL_INPUT_REPLACEMENT
                 }

@@ -12,7 +12,7 @@ export interface ToolParameterEntry {
     parameters: any
     status?: ToolStatus
     error?: string
-    turn: number  // Which turn (step-start count) this tool was called on
+    turn: number // Which turn (step-start count) this tool was called on
 }
 
 export interface SessionStats {
@@ -33,5 +33,5 @@ export interface SessionState {
     nudgeCounter: number
     lastToolPrune: boolean
     lastCompaction: number
-    currentTurn: number  // Current turn count derived from step-start parts
+    currentTurn: number // Current turn count derived from step-start parts
 }

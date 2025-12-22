@@ -13,7 +13,7 @@ Add to your OpenCode config:
 ```jsonc
 // opencode.jsonc
 {
-  "plugin": ["@tarquinen/opencode-dcp@latest"]
+    "plugin": ["@tarquinen/opencode-dcp@latest"],
 }
 ```
 
@@ -56,63 +56,63 @@ DCP uses its own config file:
 
 ```jsonc
 {
-  // Enable or disable the plugin
-  "enabled": true,
-  // Enable debug logging to ~/.config/opencode/logs/dcp/
-  "debug": false,
-  // Notification display: "off", "minimal", or "detailed"
-  "pruneNotification": "detailed",
-  // Protect from pruning for <turns> message turns
-  "turnProtection": {
-    "enabled": false,
-    "turns": 4
-  },
-  // LLM-driven context pruning tools
-  "tools": {
-    // Shared settings for all prune tools
-    "settings": {
-      // Nudge the LLM to use prune tools (every <nudgeFrequency> tool results)
-      "nudgeEnabled": true,
-      "nudgeFrequency": 10,
-      // Additional tools to protect from pruning
-      "protectedTools": []
+    // Enable or disable the plugin
+    "enabled": true,
+    // Enable debug logging to ~/.config/opencode/logs/dcp/
+    "debug": false,
+    // Notification display: "off", "minimal", or "detailed"
+    "pruneNotification": "detailed",
+    // Protect from pruning for <turns> message turns
+    "turnProtection": {
+        "enabled": false,
+        "turns": 4,
     },
-    // Removes tool content from context without preservation (for completed tasks or noise)
-    "discard": {
-      "enabled": true
+    // LLM-driven context pruning tools
+    "tools": {
+        // Shared settings for all prune tools
+        "settings": {
+            // Nudge the LLM to use prune tools (every <nudgeFrequency> tool results)
+            "nudgeEnabled": true,
+            "nudgeFrequency": 10,
+            // Additional tools to protect from pruning
+            "protectedTools": [],
+        },
+        // Removes tool content from context without preservation (for completed tasks or noise)
+        "discard": {
+            "enabled": true,
+        },
+        // Distills key findings into preserved knowledge before removing raw content
+        "extract": {
+            "enabled": true,
+            // Show distillation content as an ignored message notification
+            "showDistillation": false,
+        },
     },
-    // Distills key findings into preserved knowledge before removing raw content
-    "extract": {
-      "enabled": true,
-      // Show distillation content as an ignored message notification
-      "showDistillation": false
-    }
-  },
-  // Automatic pruning strategies
-  "strategies": {
-    // Remove duplicate tool calls (same tool with same arguments)
-    "deduplication": {
-      "enabled": true,
-      // Additional tools to protect from pruning
-      "protectedTools": []
+    // Automatic pruning strategies
+    "strategies": {
+        // Remove duplicate tool calls (same tool with same arguments)
+        "deduplication": {
+            "enabled": true,
+            // Additional tools to protect from pruning
+            "protectedTools": [],
+        },
+        // Prune write tool inputs when the file has been subsequently read
+        "supersedeWrites": {
+            "enabled": true,
+        },
+        // (Legacy) Run an LLM to analyze what tool calls are no longer relevant on idle
+        "onIdle": {
+            "enabled": false,
+            // Additional tools to protect from pruning
+            "protectedTools": [],
+            // Override model for analysis (format: "provider/model")
+            // "model": "anthropic/claude-haiku-4-5",
+            // Show toast notifications when model selection fails
+            "showModelErrorToasts": true,
+            // When true, fallback models are not permitted
+            "strictModelSelection": false,
+        },
     },
-    // Prune write tool inputs when the file has been subsequently read
-    "supersedeWrites": {
-      "enabled": true
-    },
-    // (Legacy) Run an LLM to analyze what tool calls are no longer relevant on idle
-    "onIdle": {
-      "enabled": false,
-      // Additional tools to protect from pruning
-      "protectedTools": [],
-      // Override model for analysis (format: "provider/model")
-      // "model": "anthropic/claude-haiku-4-5",
-      // Show toast notifications when model selection fails
-      "showModelErrorToasts": true,
-      // When true, fallback models are not permitted
-      "strictModelSelection": false
-    }
-  }
 }
 ```
 
@@ -128,6 +128,7 @@ By default, these tools are always protected from pruning across all strategies:
 `task`, `todowrite`, `todoread`, `discard`, `extract`, `batch`
 
 The `protectedTools` arrays in each section add to this default list:
+
 - `tools.settings.protectedTools` — Protects tools from the `discard` and `extract` tools
 - `strategies.deduplication.protectedTools` — Protects tools from deduplication
 - `strategies.onIdle.protectedTools` — Protects tools from on-idle analysis

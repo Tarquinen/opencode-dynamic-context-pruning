@@ -29,15 +29,15 @@ export class Logger {
             // Format arrays compactly
             if (Array.isArray(value)) {
                 if (value.length === 0) continue
-                parts.push(`${key}=[${value.slice(0, 3).join(",")}${value.length > 3 ? `...+${value.length - 3}` : ""}]`)
-            }
-            else if (typeof value === 'object') {
+                parts.push(
+                    `${key}=[${value.slice(0, 3).join(",")}${value.length > 3 ? `...+${value.length - 3}` : ""}]`,
+                )
+            } else if (typeof value === "object") {
                 const str = JSON.stringify(value)
                 if (str.length < 50) {
                     parts.push(`${key}=${str}`)
                 }
-            }
-            else {
+            } else {
                 parts.push(`${key}=${value}`)
             }
         }
@@ -55,15 +55,15 @@ export class Logger {
             // Skip specified number of frames to get to actual caller
             for (let i = skipFrames; i < stack.length; i++) {
                 const filename = stack[i]?.getFileName()
-                if (filename && !filename.includes('/logger.')) {
+                if (filename && !filename.includes("/logger.")) {
                     // Extract just the filename without path and extension
                     const match = filename.match(/([^/\\]+)\.[tj]s$/)
                     return match ? match[1] : filename
                 }
             }
-            return 'unknown'
+            return "unknown"
         } catch {
-            return 'unknown'
+            return "unknown"
         }
     }
 
@@ -83,10 +83,9 @@ export class Logger {
                 await mkdir(dailyLogDir, { recursive: true })
             }
 
-            const logFile = join(dailyLogDir, `${new Date().toISOString().split('T')[0]}.log`)
+            const logFile = join(dailyLogDir, `${new Date().toISOString().split("T")[0]}.log`)
             await writeFile(logFile, logLine, { flag: "a" })
-        } catch (error) {
-        }
+        } catch (error) {}
     }
 
     info(message: string, data?: any) {

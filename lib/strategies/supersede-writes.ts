@@ -16,7 +16,7 @@ export const supersedeWrites = (
     state: SessionState,
     logger: Logger,
     config: PluginConfig,
-    messages: WithParts[]
+    messages: WithParts[],
 ): void => {
     if (!config.strategies.supersedeWrites.enabled) {
         return
@@ -31,14 +31,14 @@ export const supersedeWrites = (
     // Filter out IDs already pruned
     const alreadyPruned = new Set(state.prune.toolIds)
 
-    const unprunedIds = allToolIds.filter(id => !alreadyPruned.has(id))
+    const unprunedIds = allToolIds.filter((id) => !alreadyPruned.has(id))
     if (unprunedIds.length === 0) {
         return
     }
 
     // Track write tools by file path: filePath -> [{ id, index }]
     // We track index to determine chronological order
-    const writesByFile = new Map<string, { id: string, index: number }[]>()
+    const writesByFile = new Map<string, { id: string; index: number }[]>()
 
     // Track read file paths with their index
     const readsByFile = new Map<string, number[]>()
@@ -55,12 +55,12 @@ export const supersedeWrites = (
             continue
         }
 
-        if (metadata.tool === 'write') {
+        if (metadata.tool === "write") {
             if (!writesByFile.has(filePath)) {
                 writesByFile.set(filePath, [])
             }
             writesByFile.get(filePath)!.push({ id, index: i })
-        } else if (metadata.tool === 'read') {
+        } else if (metadata.tool === "read") {
             if (!readsByFile.has(filePath)) {
                 readsByFile.set(filePath, [])
             }
@@ -85,7 +85,7 @@ export const supersedeWrites = (
             }
 
             // Check if any read comes after this write
-            const hasSubsequentRead = reads.some(readIndex => readIndex > write.index)
+            const hasSubsequentRead = reads.some((readIndex) => readIndex > write.index)
             if (hasSubsequentRead) {
                 newPruneIds.push(write.id)
             }

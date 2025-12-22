@@ -13,7 +13,7 @@ export const deduplicate = (
     state: SessionState,
     logger: Logger,
     config: PluginConfig,
-    messages: WithParts[]
+    messages: WithParts[],
 ): void => {
     if (!config.strategies.deduplication.enabled) {
         return
@@ -27,7 +27,7 @@ export const deduplicate = (
 
     // Filter out IDs already pruned
     const alreadyPruned = new Set(state.prune.toolIds)
-    const unprunedIds = allToolIds.filter(id => !alreadyPruned.has(id))
+    const unprunedIds = allToolIds.filter((id) => !alreadyPruned.has(id))
 
     if (unprunedIds.length === 0) {
         return
@@ -86,7 +86,7 @@ function createToolSignature(tool: string, parameters?: any): string {
 }
 
 function normalizeParameters(params: any): any {
-    if (typeof params !== 'object' || params === null) return params
+    if (typeof params !== "object" || params === null) return params
     if (Array.isArray(params)) return params
 
     const normalized: any = {}
@@ -99,7 +99,7 @@ function normalizeParameters(params: any): any {
 }
 
 function sortObjectKeys(obj: any): any {
-    if (typeof obj !== 'object' || obj === null) return obj
+    if (typeof obj !== "object" || obj === null) return obj
     if (Array.isArray(obj)) return obj.map(sortObjectKeys)
 
     const sorted: any = {}

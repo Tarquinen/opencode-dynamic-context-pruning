@@ -3,14 +3,14 @@ import { extractParameterKey } from "../messages/utils"
 
 export function formatTokenCount(tokens: number): string {
     if (tokens >= 1000) {
-        return `${(tokens / 1000).toFixed(1)}K`.replace('.0K', 'K') + ' tokens'
+        return `${(tokens / 1000).toFixed(1)}K`.replace(".0K", "K") + " tokens"
     }
-    return tokens.toString() + ' tokens'
+    return tokens.toString() + " tokens"
 }
 
 export function truncate(str: string, maxLen: number = 60): string {
     if (str.length <= maxLen) return str
-    return str.slice(0, maxLen - 3) + '...'
+    return str.slice(0, maxLen - 3) + "..."
 }
 
 export function shortenPath(input: string, workingDirectory?: string): string {
@@ -27,11 +27,11 @@ export function shortenPath(input: string, workingDirectory?: string): string {
 
 function shortenSinglePath(path: string, workingDirectory?: string): string {
     if (workingDirectory) {
-        if (path.startsWith(workingDirectory + '/')) {
+        if (path.startsWith(workingDirectory + "/")) {
             return path.slice(workingDirectory.length + 1)
         }
         if (path === workingDirectory) {
-            return '.'
+            return "."
         }
     }
 
@@ -44,7 +44,7 @@ function shortenSinglePath(path: string, workingDirectory?: string): string {
 export function formatPrunedItemsList(
     pruneToolIds: string[],
     toolMetadata: Map<string, ToolParameterEntry>,
-    workingDirectory?: string
+    workingDirectory?: string,
 ): string[] {
     const lines: string[] = []
 
@@ -63,13 +63,11 @@ export function formatPrunedItemsList(
         }
     }
 
-    const knownCount = pruneToolIds.filter(id =>
-        toolMetadata.has(id)
-    ).length
+    const knownCount = pruneToolIds.filter((id) => toolMetadata.has(id)).length
     const unknownCount = pruneToolIds.length - knownCount
 
     if (unknownCount > 0) {
-        lines.push(`→ (${unknownCount} tool${unknownCount > 1 ? 's' : ''} with unknown metadata)`)
+        lines.push(`→ (${unknownCount} tool${unknownCount > 1 ? "s" : ""} with unknown metadata)`)
     }
 
     return lines
@@ -81,16 +79,16 @@ export function formatPrunedItemsList(
 export function formatPruningResultForTool(
     prunedIds: string[],
     toolMetadata: Map<string, ToolParameterEntry>,
-    workingDirectory?: string
+    workingDirectory?: string,
 ): string {
     const lines: string[] = []
     lines.push(`Context pruning complete. Pruned ${prunedIds.length} tool outputs.`)
-    lines.push('')
+    lines.push("")
 
     if (prunedIds.length > 0) {
         lines.push(`Semantically pruned (${prunedIds.length}):`)
         lines.push(...formatPrunedItemsList(prunedIds, toolMetadata, workingDirectory))
     }
 
-    return lines.join('\n').trim()
+    return lines.join("\n").trim()
 }

@@ -14,8 +14,8 @@ const plugin: Plugin = (async (ctx) => {
     }
 
     // Suppress AI SDK warnings
-    if (typeof globalThis !== 'undefined') {
-        (globalThis as any).AI_SDK_LOG_WARNINGS = false
+    if (typeof globalThis !== "undefined") {
+        ;(globalThis as any).AI_SDK_LOG_WARNINGS = false
     }
 
     const logger = new Logger(config.debug)
@@ -26,7 +26,10 @@ const plugin: Plugin = (async (ctx) => {
     })
 
     return {
-        "experimental.chat.system.transform": async (_input: unknown, output: { system: string[] }) => {
+        "experimental.chat.system.transform": async (
+            _input: unknown,
+            output: { system: string[] },
+        ) => {
             const discardEnabled = config.tools.discard.enabled
             const extractEnabled = config.tools.extract.enabled
 
@@ -48,7 +51,7 @@ const plugin: Plugin = (async (ctx) => {
             ctx.client,
             state,
             logger,
-            config
+            config,
         ),
         tool: {
             ...(config.tools.discard.enabled && {
@@ -57,7 +60,7 @@ const plugin: Plugin = (async (ctx) => {
                     state,
                     logger,
                     config,
-                    workingDirectory: ctx.directory
+                    workingDirectory: ctx.directory,
                 }),
             }),
             ...(config.tools.extract.enabled && {
@@ -66,7 +69,7 @@ const plugin: Plugin = (async (ctx) => {
                     state,
                     logger,
                     config,
-                    workingDirectory: ctx.directory
+                    workingDirectory: ctx.directory,
                 }),
             }),
         },
@@ -83,7 +86,9 @@ const plugin: Plugin = (async (ctx) => {
                     ...opencodeConfig.experimental,
                     primary_tools: [...existingPrimaryTools, ...toolsToAdd],
                 }
-                logger.info(`Added ${toolsToAdd.map(t => `'${t}'`).join(" and ")} to experimental.primary_tools via config mutation`)
+                logger.info(
+                    `Added ${toolsToAdd.map((t) => `'${t}'`).join(" and ")} to experimental.primary_tools via config mutation`,
+                )
             }
         },
         event: createEventHandler(ctx.client, config, state, logger, ctx.directory),
