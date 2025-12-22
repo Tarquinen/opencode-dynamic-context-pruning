@@ -1,64 +1,10 @@
 import type { Logger } from "../logger";
 import type { SessionState } from "../state";
-import { formatPrunedItemsList, formatTokenCount } from "./utils";
+import { formatPrunedItemsList } from "./utils";
 import { ToolParameterEntry } from "../state";
 import { PluginConfig } from "../config";
 
 export type PruneReason = "completion" | "noise" | "consolidation";
-export const PRUNE_REASON_LABELS: Record<PruneReason, string> = {
-  completion: "Task Complete",
-  noise: "Noise Removal",
-  consolidation: "Consolidation",
-};
-
-function formatStatsHeader(
-  totalTokensSaved: number,
-  pruneTokenCounter: number,
-): string {
-  const totalTokensSavedStr = `~${formatTokenCount(totalTokensSaved + pruneTokenCounter)}`;
-  return [`▣ DCP | ${totalTokensSavedStr} saved total`].join("\n");
-}
-
-function buildMinimalMessage(
-  state: SessionState,
-  reason: PruneReason | undefined,
-): string {
-  const reasonSuffix = reason ? ` [${PRUNE_REASON_LABELS[reason]}]` : "";
-  return (
-    formatStatsHeader(
-      state.stats.totalPruneTokens,
-      state.stats.pruneTokenCounter,
-    ) + reasonSuffix
-  );
-}
-
-function buildDetailedMessage(
-  state: SessionState,
-  reason: PruneReason | undefined,
-  pruneToolIds: string[],
-  toolMetadata: Map<string, ToolParameterEntry>,
-  workingDirectory?: string,
-): string {
-  let message = formatStatsHeader(
-    state.stats.totalPruneTokens,
-    state.stats.pruneTokenCounter,
-  );
-
-  if (pruneToolIds.length > 0) {
-    const pruneTokenCounterStr = `~${formatTokenCount(state.stats.pruneTokenCounter)}`;
-    const reasonLabel = reason ? ` — ${PRUNE_REASON_LABELS[reason]}` : "";
-    message += `\n\n▣ Pruning (${pruneTokenCounterStr})${reasonLabel}`;
-
-    const itemLines = formatPrunedItemsList(
-      pruneToolIds,
-      toolMetadata,
-      workingDirectory,
-    );
-    message += "\n" + itemLines.join("\n");
-  }
-
-  return message.trim();
-}
 
 export async function sendUnifiedNotification(
   client: any,
@@ -81,35 +27,34 @@ export async function sendUnifiedNotification(
     return false;
   }
 
-  const message =
-    config.pruningSummary === "minimal"
-      ? buildMinimalMessage(state, reason)
-      : buildDetailedMessage(
-          state,
-          reason,
-          pruneToolIds,
-          toolMetadata,
-          workingDirectory,
-        );
+  const totalSaved =
+    state.stats.totalPruneTokens + state.stats.pruneTokenCounter;
+  const itemLines = formatPrunedItemsList(
+    pruneToolIds,
+    toolMetadata,
+    workingDirectory,
+  );
 
-  await sendIgnoredMessage(
+  await sendPruneSummary(
     client,
     sessionId,
-    message,
     params,
     logger,
-    state.stats.totalPruneTokens + state.stats.pruneTokenCounter,
+    totalSaved,
+    pruneToolIds.length,
+    itemLines,
   );
   return true;
 }
 
-export async function sendIgnoredMessage(
+export async function sendPruneSummary(
   client: any,
-  sessionID: string,
-  text: string,
+  sessionId: string,
   params: any,
   logger: Logger,
-  totalSaved?: number,
+  totalSaved: number,
+  count: number,
+  itemLines: string[],
 ): Promise<void> {
   const agent = params.agent || undefined;
   const model =
@@ -120,34 +65,28 @@ export async function sendIgnoredMessage(
         }
       : undefined;
 
+  const formatted =
+    totalSaved >= 1000
+      ? `~${(totalSaved / 1000).toFixed(1)}K`
+      : `${totalSaved}`;
+
   const parts: any[] = [
     {
       type: "text",
-      text: text,
-      ignored: true,
-    },
-  ];
-
-  // Add plugin UI part if we have saved tokens
-  if (totalSaved && totalSaved > 0) {
-    const formatted =
-      totalSaved >= 1000
-        ? `~${(totalSaved / 1000).toFixed(1)}K`
-        : `${totalSaved}`;
-    parts.push({
-      type: "text",
-      text: "dcp-status",
+      text: "dcp-prune-summary",
       plugin: true,
       metadata: {
         saved: formatted,
+        count: String(count),
+        itemsList: itemLines.join("\n"),
       },
-    });
-  }
+    },
+  ];
 
   try {
     await client.session.prompt({
       path: {
-        id: sessionID,
+        id: sessionId,
       },
       body: {
         noReply: true,
@@ -157,6 +96,6 @@ export async function sendIgnoredMessage(
       },
     });
   } catch (error: any) {
-    logger.error("Failed to send notification", { error: error.message });
+    logger.error("Failed to send prune summary", { error: error.message });
   }
 }

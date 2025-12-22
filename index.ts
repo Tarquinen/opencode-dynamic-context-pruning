@@ -38,6 +38,55 @@ const plugin: Plugin = (async (ctx) => {
   return {
     ui: [
       {
+        name: "dcp-prune-summary",
+        template: {
+          type: "box",
+          direction: "column",
+          gap: 0,
+          children: [
+            {
+              type: "box",
+              direction: "row",
+              gap: 1,
+              children: [
+                {
+                  type: "text",
+                  content: "▣",
+                  fg: "textMuted",
+                },
+                {
+                  type: "text",
+                  content: "DCP",
+                  fg: "text",
+                  bold: true,
+                },
+                {
+                  type: "text",
+                  content: "{{saved}} saved",
+                  fg: "textMuted",
+                },
+              ],
+            },
+            {
+              type: "collapsible",
+              title: "{{count}} items pruned",
+              expanded: false,
+              fg: "textMuted",
+              fgExpanded: "text",
+              icon: "▶",
+              iconExpanded: "▼",
+              children: [
+                {
+                  type: "text",
+                  content: "{{itemsList}}",
+                  fg: "textMuted",
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
         name: "dcp-confirm",
         replaceInput: true,
         template: {
