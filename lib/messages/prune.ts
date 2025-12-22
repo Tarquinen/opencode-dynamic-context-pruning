@@ -9,8 +9,8 @@ import { UserMessage } from "@opencode-ai/sdk"
 const PRUNED_TOOL_INPUT_REPLACEMENT = '[Input removed to save context]'
 const PRUNED_TOOL_OUTPUT_REPLACEMENT = '[Output removed to save context - information superseded or no longer needed]'
 const getNudgeString = (config: PluginConfig): string => {
-    const discardEnabled = config.strategies.discardTool.enabled
-    const extractEnabled = config.strategies.extractTool.enabled
+    const discardEnabled = config.tools.discard.enabled
+    const extractEnabled = config.tools.extract.enabled
 
     if (discardEnabled && extractEnabled) {
         return loadPrompt("nudge/nudge-both")
@@ -28,8 +28,8 @@ ${content}
 </prunable-tools>`
 
 const getCooldownMessage = (config: PluginConfig): string => {
-    const discardEnabled = config.strategies.discardTool.enabled
-    const extractEnabled = config.strategies.extractTool.enabled
+    const discardEnabled = config.tools.discard.enabled
+    const extractEnabled = config.tools.extract.enabled
 
     let toolName: string
     if (discardEnabled && extractEnabled) {
@@ -61,10 +61,7 @@ const buildPrunableToolsList = (
         if (state.prune.toolIds.includes(toolCallId)) {
             return
         }
-        const allProtectedTools = [
-            ...config.strategies.discardTool.protectedTools,
-            ...config.strategies.extractTool.protectedTools
-        ]
+        const allProtectedTools = config.tools.settings.protectedTools
         if (allProtectedTools.includes(toolParameterEntry.tool)) {
             return
         }
@@ -92,7 +89,7 @@ export const insertPruneToolContext = (
     logger: Logger,
     messages: WithParts[]
 ): void => {
-    if (!config.strategies.discardTool.enabled && !config.strategies.extractTool.enabled) {
+    if (!config.tools.discard.enabled && !config.tools.extract.enabled) {
         return
     }
 
@@ -115,13 +112,7 @@ export const insertPruneToolContext = (
         logger.debug("prunable-tools: \n" + prunableToolsList)
 
         let nudgeString = ""
-        // TODO: Using Math.min() means the lower frequency dominates when both tools are enabled.
-        // Consider using separate counters for each tool's nudge, or documenting this behavior.
-        const nudgeFrequency = Math.min(
-            config.strategies.discardTool.nudge.frequency,
-            config.strategies.extractTool.nudge.frequency
-        )
-        if (state.nudgeCounter >= nudgeFrequency) {
+        if (config.tools.settings.nudgeEnabled && state.nudgeCounter >= config.tools.settings.nudgeFrequency) {
             logger.info("Inserting prune nudge message")
             nudgeString = "\n" + getNudgeString(config)
         }

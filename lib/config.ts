@@ -17,51 +17,45 @@ export interface OnIdle {
     protectedTools: string[]
 }
 
-export interface PruneToolNudge {
-    enabled: boolean
-    frequency: number
-}
-
-export interface PruneToolTurnProtection {
-    enabled: boolean
-    turns: number
-}
-
-export interface PruneTool {
-    enabled: boolean
-    protectedTools: string[]
-    turnProtection: PruneToolTurnProtection
-    nudge: PruneToolNudge
-}
-
 export interface DiscardTool {
     enabled: boolean
-    protectedTools: string[]
-    turnProtection: PruneToolTurnProtection
-    nudge: PruneToolNudge
 }
 
 export interface ExtractTool {
     enabled: boolean
-    protectedTools: string[]
-    turnProtection: PruneToolTurnProtection
-    nudge: PruneToolNudge
     showDistillation: boolean
+}
+
+export interface ToolSettings {
+    nudgeEnabled: boolean
+    nudgeFrequency: number
+    protectedTools: string[]
+}
+
+export interface Tools {
+    settings: ToolSettings
+    discard: DiscardTool
+    extract: ExtractTool
 }
 
 export interface SupersedeWrites {
     enabled: boolean
 }
 
+export interface TurnProtection {
+    enabled: boolean
+    turns: number
+}
+
 export interface PluginConfig {
     enabled: boolean
     debug: boolean
-    pruningSummary: "off" | "minimal" | "detailed"
+    pruneNotification: "off" | "minimal" | "detailed"
+    turnProtection: TurnProtection
+    tools: Tools
     strategies: {
         deduplication: Deduplication
         onIdle: OnIdle
-        discardTool: DiscardTool
-        extractTool: ExtractTool
         supersedeWrites: SupersedeWrites
     }
 }
@@ -74,7 +68,20 @@ export const VALID_CONFIG_KEYS = new Set([
     'enabled',
     'debug',
     'showUpdateToasts', // Deprecated but kept for backwards compatibility
-    'pruningSummary',
+    'pruneNotification',
+    'turnProtection',
+    'turnProtection.enabled',
+    'turnProtection.turns',
+    'tools',
+    'tools.settings',
+    'tools.settings.nudgeEnabled',
+    'tools.settings.nudgeFrequency',
+    'tools.settings.protectedTools',
+    'tools.discard',
+    'tools.discard.enabled',
+    'tools.extract',
+    'tools.extract.enabled',
+    'tools.extract.showDistillation',
     'strategies',
     // strategies.deduplication
     'strategies.deduplication',
@@ -89,28 +96,7 @@ export const VALID_CONFIG_KEYS = new Set([
     'strategies.onIdle.model',
     'strategies.onIdle.showModelErrorToasts',
     'strategies.onIdle.strictModelSelection',
-    'strategies.onIdle.protectedTools',
-    // strategies.discardTool
-    'strategies.discardTool',
-    'strategies.discardTool.enabled',
-    'strategies.discardTool.protectedTools',
-    'strategies.discardTool.turnProtection',
-    'strategies.discardTool.turnProtection.enabled',
-    'strategies.discardTool.turnProtection.turns',
-    'strategies.discardTool.nudge',
-    'strategies.discardTool.nudge.enabled',
-    'strategies.discardTool.nudge.frequency',
-    // strategies.extractTool
-    'strategies.extractTool',
-    'strategies.extractTool.enabled',
-    'strategies.extractTool.protectedTools',
-    'strategies.extractTool.turnProtection',
-    'strategies.extractTool.turnProtection.enabled',
-    'strategies.extractTool.turnProtection.turns',
-    'strategies.extractTool.nudge',
-    'strategies.extractTool.nudge.enabled',
-    'strategies.extractTool.nudge.frequency',
-    'strategies.extractTool.showDistillation'
+    'strategies.onIdle.protectedTools'
 ])
 
 // Extract all key paths from a config object for validation
@@ -149,10 +135,49 @@ function validateConfigTypes(config: Record<string, any>): ValidationError[] {
     if (config.debug !== undefined && typeof config.debug !== 'boolean') {
         errors.push({ key: 'debug', expected: 'boolean', actual: typeof config.debug })
     }
-    if (config.pruningSummary !== undefined) {
+    if (config.pruneNotification !== undefined) {
         const validValues = ['off', 'minimal', 'detailed']
-        if (!validValues.includes(config.pruningSummary)) {
-            errors.push({ key: 'pruningSummary', expected: '"off" | "minimal" | "detailed"', actual: JSON.stringify(config.pruningSummary) })
+        if (!validValues.includes(config.pruneNotification)) {
+            errors.push({ key: 'pruneNotification', expected: '"off" | "minimal" | "detailed"', actual: JSON.stringify(config.pruneNotification) })
+        }
+    }
+
+    // Top-level turnProtection validator
+    if (config.turnProtection) {
+        if (config.turnProtection.enabled !== undefined && typeof config.turnProtection.enabled !== 'boolean') {
+            errors.push({ key: 'turnProtection.enabled', expected: 'boolean', actual: typeof config.turnProtection.enabled })
+        }
+        if (config.turnProtection.turns !== undefined && typeof config.turnProtection.turns !== 'number') {
+            errors.push({ key: 'turnProtection.turns', expected: 'number', actual: typeof config.turnProtection.turns })
+        }
+    }
+
+    // Tools validators
+    const tools = config.tools
+    if (tools) {
+        if (tools.settings) {
+            if (tools.settings.nudgeEnabled !== undefined && typeof tools.settings.nudgeEnabled !== 'boolean') {
+                errors.push({ key: 'tools.settings.nudgeEnabled', expected: 'boolean', actual: typeof tools.settings.nudgeEnabled })
+            }
+            if (tools.settings.nudgeFrequency !== undefined && typeof tools.settings.nudgeFrequency !== 'number') {
+                errors.push({ key: 'tools.settings.nudgeFrequency', expected: 'number', actual: typeof tools.settings.nudgeFrequency })
+            }
+            if (tools.settings.protectedTools !== undefined && !Array.isArray(tools.settings.protectedTools)) {
+                errors.push({ key: 'tools.settings.protectedTools', expected: 'string[]', actual: typeof tools.settings.protectedTools })
+            }
+        }
+        if (tools.discard) {
+            if (tools.discard.enabled !== undefined && typeof tools.discard.enabled !== 'boolean') {
+                errors.push({ key: 'tools.discard.enabled', expected: 'boolean', actual: typeof tools.discard.enabled })
+            }
+        }
+        if (tools.extract) {
+            if (tools.extract.enabled !== undefined && typeof tools.extract.enabled !== 'boolean') {
+                errors.push({ key: 'tools.extract.enabled', expected: 'boolean', actual: typeof tools.extract.enabled })
+            }
+            if (tools.extract.showDistillation !== undefined && typeof tools.extract.showDistillation !== 'boolean') {
+                errors.push({ key: 'tools.extract.showDistillation', expected: 'boolean', actual: typeof tools.extract.showDistillation })
+            }
         }
     }
 
@@ -183,61 +208,6 @@ function validateConfigTypes(config: Record<string, any>): ValidationError[] {
             }
             if (strategies.onIdle.protectedTools !== undefined && !Array.isArray(strategies.onIdle.protectedTools)) {
                 errors.push({ key: 'strategies.onIdle.protectedTools', expected: 'string[]', actual: typeof strategies.onIdle.protectedTools })
-            }
-        }
-
-        // discardTool
-        if (strategies.discardTool) {
-            if (strategies.discardTool.enabled !== undefined && typeof strategies.discardTool.enabled !== 'boolean') {
-                errors.push({ key: 'strategies.discardTool.enabled', expected: 'boolean', actual: typeof strategies.discardTool.enabled })
-            }
-            if (strategies.discardTool.protectedTools !== undefined && !Array.isArray(strategies.discardTool.protectedTools)) {
-                errors.push({ key: 'strategies.discardTool.protectedTools', expected: 'string[]', actual: typeof strategies.discardTool.protectedTools })
-            }
-            if (strategies.discardTool.turnProtection) {
-                if (strategies.discardTool.turnProtection.enabled !== undefined && typeof strategies.discardTool.turnProtection.enabled !== 'boolean') {
-                    errors.push({ key: 'strategies.discardTool.turnProtection.enabled', expected: 'boolean', actual: typeof strategies.discardTool.turnProtection.enabled })
-                }
-                if (strategies.discardTool.turnProtection.turns !== undefined && typeof strategies.discardTool.turnProtection.turns !== 'number') {
-                    errors.push({ key: 'strategies.discardTool.turnProtection.turns', expected: 'number', actual: typeof strategies.discardTool.turnProtection.turns })
-                }
-            }
-            if (strategies.discardTool.nudge) {
-                if (strategies.discardTool.nudge.enabled !== undefined && typeof strategies.discardTool.nudge.enabled !== 'boolean') {
-                    errors.push({ key: 'strategies.discardTool.nudge.enabled', expected: 'boolean', actual: typeof strategies.discardTool.nudge.enabled })
-                }
-                if (strategies.discardTool.nudge.frequency !== undefined && typeof strategies.discardTool.nudge.frequency !== 'number') {
-                    errors.push({ key: 'strategies.discardTool.nudge.frequency', expected: 'number', actual: typeof strategies.discardTool.nudge.frequency })
-                }
-            }
-        }
-
-        // extractTool
-        if (strategies.extractTool) {
-            if (strategies.extractTool.enabled !== undefined && typeof strategies.extractTool.enabled !== 'boolean') {
-                errors.push({ key: 'strategies.extractTool.enabled', expected: 'boolean', actual: typeof strategies.extractTool.enabled })
-            }
-            if (strategies.extractTool.protectedTools !== undefined && !Array.isArray(strategies.extractTool.protectedTools)) {
-                errors.push({ key: 'strategies.extractTool.protectedTools', expected: 'string[]', actual: typeof strategies.extractTool.protectedTools })
-            }
-            if (strategies.extractTool.turnProtection) {
-                if (strategies.extractTool.turnProtection.enabled !== undefined && typeof strategies.extractTool.turnProtection.enabled !== 'boolean') {
-                    errors.push({ key: 'strategies.extractTool.turnProtection.enabled', expected: 'boolean', actual: typeof strategies.extractTool.turnProtection.enabled })
-                }
-                if (strategies.extractTool.turnProtection.turns !== undefined && typeof strategies.extractTool.turnProtection.turns !== 'number') {
-                    errors.push({ key: 'strategies.extractTool.turnProtection.turns', expected: 'number', actual: typeof strategies.extractTool.turnProtection.turns })
-                }
-            }
-            if (strategies.extractTool.nudge) {
-                if (strategies.extractTool.nudge.enabled !== undefined && typeof strategies.extractTool.nudge.enabled !== 'boolean') {
-                    errors.push({ key: 'strategies.extractTool.nudge.enabled', expected: 'boolean', actual: typeof strategies.extractTool.nudge.enabled })
-                }
-                if (strategies.extractTool.nudge.frequency !== undefined && typeof strategies.extractTool.nudge.frequency !== 'number') {
-                    errors.push({ key: 'strategies.extractTool.nudge.frequency', expected: 'number', actual: typeof strategies.extractTool.nudge.frequency })
-                }
-            }
-            if (strategies.extractTool.showDistillation !== undefined && typeof strategies.extractTool.showDistillation !== 'boolean') {
-                errors.push({ key: 'strategies.extractTool.showDistillation', expected: 'boolean', actual: typeof strategies.extractTool.showDistillation })
             }
         }
 
@@ -301,7 +271,25 @@ function showConfigValidationWarnings(
 const defaultConfig: PluginConfig = {
     enabled: true,
     debug: false,
-    pruningSummary: 'detailed',
+    pruneNotification: 'detailed',
+    turnProtection: {
+        enabled: false,
+        turns: 4
+    },
+    tools: {
+        settings: {
+            nudgeEnabled: true,
+            nudgeFrequency: 10,
+            protectedTools: [...DEFAULT_PROTECTED_TOOLS]
+        },
+        discard: {
+            enabled: true
+        },
+        extract: {
+            enabled: true,
+            showDistillation: false
+        }
+    },
     strategies: {
         deduplication: {
             enabled: true,
@@ -309,31 +297,6 @@ const defaultConfig: PluginConfig = {
         },
         supersedeWrites: {
             enabled: true
-        },
-        discardTool: {
-            enabled: true,
-            protectedTools: [...DEFAULT_PROTECTED_TOOLS],
-            turnProtection: {
-                enabled: false,
-                turns: 4
-            },
-            nudge: {
-                enabled: true,
-                frequency: 10
-            }
-        },
-        extractTool: {
-            enabled: true,
-            protectedTools: [...DEFAULT_PROTECTED_TOOLS],
-            turnProtection: {
-                enabled: false,
-                turns: 4
-            },
-            nudge: {
-                enabled: true,
-                frequency: 10
-            },
-            showDistillation: false
         },
         onIdle: {
             enabled: false,
@@ -412,9 +375,35 @@ function createDefaultConfig(): void {
   "enabled": true,
   // Enable debug logging to ~/.config/opencode/logs/dcp/
   "debug": false,
-  // Summary display: "off", "minimal", or "detailed"
-  "pruningSummary": "detailed",
-  // Strategies for pruning tokens from chat history
+  // Notification display: "off", "minimal", or "detailed"
+  "pruneNotification": "detailed",
+  // Protect from pruning for <turns> message turns
+  "turnProtection": {
+    "enabled": false,
+    "turns": 4
+  },
+  // LLM-driven context pruning tools
+  "tools": {
+    // Shared settings for all prune tools
+    "settings": {
+      // Nudge the LLM to use prune tools (every <nudgeFrequency> tool results)
+      "nudgeEnabled": true,
+      "nudgeFrequency": 10,
+      // Additional tools to protect from pruning
+      "protectedTools": []
+    },
+    // Removes tool content from context without preservation (for completed tasks or noise)
+    "discard": {
+      "enabled": true
+    },
+    // Distills key findings into preserved knowledge before removing raw content
+    "extract": {
+      "enabled": true,
+      // Show distillation content as an ignored message notification
+      "showDistillation": false
+    }
+  },
+  // Automatic pruning strategies
   "strategies": {
     // Remove duplicate tool calls (same tool with same arguments)
     "deduplication": {
@@ -425,40 +414,6 @@ function createDefaultConfig(): void {
     // Prune write tool inputs when the file has been subsequently read
     "supersedeWrites": {
       "enabled": true
-    },
-    // Removes tool content from context without preservation (for completed tasks or noise)
-    "discardTool": {
-      "enabled": true,
-      // Additional tools to protect from pruning
-      "protectedTools": [],
-      // Protect from pruning for <turn protection> message turns
-      "turnProtection": {
-        "enabled": false,
-        "turns": 4
-      },
-      // Nudge the LLM to use the discard tool (every <frequency> tool results)
-      "nudge": {
-        "enabled": true,
-        "frequency": 10
-      }
-    },
-    // Distills key findings into preserved knowledge before removing raw content
-    "extractTool": {
-      "enabled": true,
-      // Additional tools to protect from pruning
-      "protectedTools": [],
-      // Protect from pruning for <turn protection> message turns
-      "turnProtection": {
-        "enabled": false,
-        "turns": 4
-      },
-      // Nudge the LLM to use the extract tool (every <frequency> tool results)
-      "nudge": {
-        "enabled": true,
-        "frequency": 10
-      },
-      // Show distillation content as an ignored message notification
-      "showDistillation": false
     },
     // (Legacy) Run an LLM to analyze what tool calls are no longer relevant on idle
     "onIdle": {
@@ -531,43 +486,35 @@ function mergeStrategies(
                 ])
             ]
         },
-        discardTool: {
-            enabled: override.discardTool?.enabled ?? base.discardTool.enabled,
-            protectedTools: [
-                ...new Set([
-                    ...base.discardTool.protectedTools,
-                    ...(override.discardTool?.protectedTools ?? [])
-                ])
-            ],
-            turnProtection: {
-                enabled: override.discardTool?.turnProtection?.enabled ?? base.discardTool.turnProtection.enabled,
-                turns: override.discardTool?.turnProtection?.turns ?? base.discardTool.turnProtection.turns
-            },
-            nudge: {
-                enabled: override.discardTool?.nudge?.enabled ?? base.discardTool.nudge.enabled,
-                frequency: override.discardTool?.nudge?.frequency ?? base.discardTool.nudge.frequency
-            }
-        },
-        extractTool: {
-            enabled: override.extractTool?.enabled ?? base.extractTool.enabled,
-            protectedTools: [
-                ...new Set([
-                    ...base.extractTool.protectedTools,
-                    ...(override.extractTool?.protectedTools ?? [])
-                ])
-            ],
-            turnProtection: {
-                enabled: override.extractTool?.turnProtection?.enabled ?? base.extractTool.turnProtection.enabled,
-                turns: override.extractTool?.turnProtection?.turns ?? base.extractTool.turnProtection.turns
-            },
-            nudge: {
-                enabled: override.extractTool?.nudge?.enabled ?? base.extractTool.nudge.enabled,
-                frequency: override.extractTool?.nudge?.frequency ?? base.extractTool.nudge.frequency
-            },
-            showDistillation: override.extractTool?.showDistillation ?? base.extractTool.showDistillation
-        },
         supersedeWrites: {
             enabled: override.supersedeWrites?.enabled ?? base.supersedeWrites.enabled
+        }
+    }
+}
+
+function mergeTools(
+    base: PluginConfig['tools'],
+    override?: Partial<PluginConfig['tools']>
+): PluginConfig['tools'] {
+    if (!override) return base
+
+    return {
+        settings: {
+            nudgeEnabled: override.settings?.nudgeEnabled ?? base.settings.nudgeEnabled,
+            nudgeFrequency: override.settings?.nudgeFrequency ?? base.settings.nudgeFrequency,
+            protectedTools: [
+                ...new Set([
+                    ...base.settings.protectedTools,
+                    ...(override.settings?.protectedTools ?? [])
+                ])
+            ]
+        },
+        discard: {
+            enabled: override.discard?.enabled ?? base.discard.enabled
+        },
+        extract: {
+            enabled: override.extract?.enabled ?? base.extract.enabled,
+            showDistillation: override.extract?.showDistillation ?? base.extract.showDistillation
         }
     }
 }
@@ -575,6 +522,15 @@ function mergeStrategies(
 function deepCloneConfig(config: PluginConfig): PluginConfig {
     return {
         ...config,
+        turnProtection: { ...config.turnProtection },
+        tools: {
+            settings: {
+                ...config.tools.settings,
+                protectedTools: [...config.tools.settings.protectedTools]
+            },
+            discard: { ...config.tools.discard },
+            extract: { ...config.tools.extract }
+        },
         strategies: {
             deduplication: {
                 ...config.strategies.deduplication,
@@ -583,19 +539,6 @@ function deepCloneConfig(config: PluginConfig): PluginConfig {
             onIdle: {
                 ...config.strategies.onIdle,
                 protectedTools: [...config.strategies.onIdle.protectedTools]
-            },
-            discardTool: {
-                ...config.strategies.discardTool,
-                protectedTools: [...config.strategies.discardTool.protectedTools],
-                turnProtection: { ...config.strategies.discardTool.turnProtection },
-                nudge: { ...config.strategies.discardTool.nudge }
-            },
-            extractTool: {
-                ...config.strategies.extractTool,
-                protectedTools: [...config.strategies.extractTool.protectedTools],
-                turnProtection: { ...config.strategies.extractTool.turnProtection },
-                nudge: { ...config.strategies.extractTool.nudge },
-                showDistillation: config.strategies.extractTool.showDistillation
             },
             supersedeWrites: {
                 ...config.strategies.supersedeWrites
@@ -631,7 +574,12 @@ export function getConfig(ctx: PluginInput): PluginConfig {
             config = {
                 enabled: result.data.enabled ?? config.enabled,
                 debug: result.data.debug ?? config.debug,
-                pruningSummary: result.data.pruningSummary ?? config.pruningSummary,
+                pruneNotification: result.data.pruneNotification ?? config.pruneNotification,
+                turnProtection: {
+                    enabled: result.data.turnProtection?.enabled ?? config.turnProtection.enabled,
+                    turns: result.data.turnProtection?.turns ?? config.turnProtection.turns
+                },
+                tools: mergeTools(config.tools, result.data.tools as any),
                 strategies: mergeStrategies(config.strategies, result.data.strategies as any)
             }
         }
@@ -662,7 +610,12 @@ export function getConfig(ctx: PluginInput): PluginConfig {
             config = {
                 enabled: result.data.enabled ?? config.enabled,
                 debug: result.data.debug ?? config.debug,
-                pruningSummary: result.data.pruningSummary ?? config.pruningSummary,
+                pruneNotification: result.data.pruneNotification ?? config.pruneNotification,
+                turnProtection: {
+                    enabled: result.data.turnProtection?.enabled ?? config.turnProtection.enabled,
+                    turns: result.data.turnProtection?.turns ?? config.turnProtection.turns
+                },
+                tools: mergeTools(config.tools, result.data.tools as any),
                 strategies: mergeStrategies(config.strategies, result.data.strategies as any)
             }
         }
@@ -690,7 +643,12 @@ export function getConfig(ctx: PluginInput): PluginConfig {
             config = {
                 enabled: result.data.enabled ?? config.enabled,
                 debug: result.data.debug ?? config.debug,
-                pruningSummary: result.data.pruningSummary ?? config.pruningSummary,
+                pruneNotification: result.data.pruneNotification ?? config.pruneNotification,
+                turnProtection: {
+                    enabled: result.data.turnProtection?.enabled ?? config.turnProtection.enabled,
+                    turns: result.data.turnProtection?.turns ?? config.turnProtection.turns
+                },
+                tools: mergeTools(config.tools, result.data.tools as any),
                 strategies: mergeStrategies(config.strategies, result.data.strategies as any)
             }
         }

@@ -70,11 +70,11 @@ export async function sendUnifiedNotification(
         return false
     }
 
-    if (config.pruningSummary === 'off') {
+    if (config.pruneNotification === 'off') {
         return false
     }
 
-    const message = config.pruningSummary === 'minimal'
+    const message = config.pruneNotification === 'minimal'
         ? buildMinimalMessage(state, reason)
         : buildDetailedMessage(state, reason, pruneToolIds, toolMetadata, workingDirectory)
 

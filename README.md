@@ -60,9 +60,35 @@ DCP uses its own config file:
   "enabled": true,
   // Enable debug logging to ~/.config/opencode/logs/dcp/
   "debug": false,
-  // Summary display: "off", "minimal", or "detailed"
-  "pruningSummary": "detailed",
-  // Strategies for pruning tokens from chat history
+  // Notification display: "off", "minimal", or "detailed"
+  "pruneNotification": "detailed",
+  // Protect from pruning for <turns> message turns
+  "turnProtection": {
+    "enabled": false,
+    "turns": 4
+  },
+  // LLM-driven context pruning tools
+  "tools": {
+    // Shared settings for all prune tools
+    "settings": {
+      // Nudge the LLM to use prune tools (every <nudgeFrequency> tool results)
+      "nudgeEnabled": true,
+      "nudgeFrequency": 10,
+      // Additional tools to protect from pruning
+      "protectedTools": []
+    },
+    // Removes tool content from context without preservation (for completed tasks or noise)
+    "discard": {
+      "enabled": true
+    },
+    // Distills key findings into preserved knowledge before removing raw content
+    "extract": {
+      "enabled": true,
+      // Show distillation content as an ignored message notification
+      "showDistillation": false
+    }
+  },
+  // Automatic pruning strategies
   "strategies": {
     // Remove duplicate tool calls (same tool with same arguments)
     "deduplication": {
@@ -73,40 +99,6 @@ DCP uses its own config file:
     // Prune write tool inputs when the file has been subsequently read
     "supersedeWrites": {
       "enabled": true
-    },
-    // Removes tool content from context without preservation (for completed tasks or noise)
-    "discardTool": {
-      "enabled": true,
-      // Additional tools to protect from pruning
-      "protectedTools": [],
-      // Protect from pruning for <turn protection> message turns
-      "turnProtection": {
-        "enabled": false,
-        "turns": 4
-      },
-      // Nudge the LLM to use the discard tool (every <frequency> tool results)
-      "nudge": {
-        "enabled": true,
-        "frequency": 10
-      }
-    },
-    // Distills key findings into preserved knowledge before removing raw content
-    "extractTool": {
-      "enabled": true,
-      // Additional tools to protect from pruning
-      "protectedTools": [],
-      // Protect from pruning for <turn protection> message turns
-      "turnProtection": {
-        "enabled": false,
-        "turns": 4
-      },
-      // Nudge the LLM to use the extract tool (every <frequency> tool results)
-      "nudge": {
-        "enabled": true,
-        "frequency": 10
-      },
-      // Show distillation content as an ignored message notification
-      "showDistillation": false
     },
     // (Legacy) Run an LLM to analyze what tool calls are no longer relevant on idle
     "onIdle": {
@@ -126,12 +118,19 @@ DCP uses its own config file:
 
 </details>
 
+### Turn Protection
+
+When enabled, turn protection prevents tool outputs from being pruned for a configurable number of message turns. This gives the AI time to reference recent tool outputs before they become prunable. Applies to both `discard` and `extract` tools, as well as automatic strategies.
+
 ### Protected Tools
 
 By default, these tools are always protected from pruning across all strategies:
 `task`, `todowrite`, `todoread`, `discard`, `extract`, `batch`
 
-The `protectedTools` arrays in each strategy add to this default list.
+The `protectedTools` arrays in each section add to this default list:
+- `tools.settings.protectedTools` — Protects tools from the `discard` and `extract` tools
+- `strategies.deduplication.protectedTools` — Protects tools from deduplication
+- `strategies.onIdle.protectedTools` — Protects tools from on-idle analysis
 
 ### Config Precedence
 

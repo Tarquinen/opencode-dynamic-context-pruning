@@ -35,22 +35,15 @@ export async function syncToolCache(
                     continue
                 }
 
-                const turnProtectionEnabled = config.strategies.discardTool.turnProtection.enabled || 
-                    config.strategies.extractTool.turnProtection.enabled
-                const turnProtectionTurns = Math.max(
-                    config.strategies.discardTool.turnProtection.turns,
-                    config.strategies.extractTool.turnProtection.turns
-                )
+                const turnProtectionEnabled = config.turnProtection.enabled
+                const turnProtectionTurns = config.turnProtection.turns
                 const isProtectedByTurn = turnProtectionEnabled &&
                     turnProtectionTurns > 0 &&
                     (state.currentTurn - turnCounter) < turnProtectionTurns
 
                 state.lastToolPrune = part.tool === "discard" || part.tool === "extract"
 
-                const allProtectedTools = [
-                    ...config.strategies.discardTool.protectedTools,
-                    ...config.strategies.extractTool.protectedTools
-                ]
+                const allProtectedTools = config.tools.settings.protectedTools
 
                 if (part.tool === "discard" || part.tool === "extract") {
                     state.nudgeCounter = 0

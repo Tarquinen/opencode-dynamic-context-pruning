@@ -27,8 +27,8 @@ const plugin: Plugin = (async (ctx) => {
 
     return {
         "experimental.chat.system.transform": async (_input: unknown, output: { system: string[] }) => {
-            const discardEnabled = config.strategies.discardTool.enabled
-            const extractEnabled = config.strategies.extractTool.enabled
+            const discardEnabled = config.tools.discard.enabled
+            const extractEnabled = config.tools.extract.enabled
 
             let promptName: string
             if (discardEnabled && extractEnabled) {
@@ -51,7 +51,7 @@ const plugin: Plugin = (async (ctx) => {
             config
         ),
         tool: {
-            ...(config.strategies.discardTool.enabled && {
+            ...(config.tools.discard.enabled && {
                 discard: createDiscardTool({
                     client: ctx.client,
                     state,
@@ -60,7 +60,7 @@ const plugin: Plugin = (async (ctx) => {
                     workingDirectory: ctx.directory
                 }),
             }),
-            ...(config.strategies.extractTool.enabled && {
+            ...(config.tools.extract.enabled && {
                 extract: createExtractTool({
                     client: ctx.client,
                     state,
@@ -74,8 +74,8 @@ const plugin: Plugin = (async (ctx) => {
             // Add enabled tools to primary_tools by mutating the opencode config
             // This works because config is cached and passed by reference
             const toolsToAdd: string[] = []
-            if (config.strategies.discardTool.enabled) toolsToAdd.push("discard")
-            if (config.strategies.extractTool.enabled) toolsToAdd.push("extract")
+            if (config.tools.discard.enabled) toolsToAdd.push("discard")
+            if (config.tools.extract.enabled) toolsToAdd.push("extract")
 
             if (toolsToAdd.length > 0) {
                 const existingPrimaryTools = opencodeConfig.experimental?.primary_tools ?? []

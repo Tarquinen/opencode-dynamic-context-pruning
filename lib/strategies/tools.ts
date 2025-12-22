@@ -76,10 +76,7 @@ async function executePruneOperation(
             logger.debug("Rejecting prune request - ID not in cache (turn-protected or hallucinated)", { index, id })
             return "Invalid IDs provided. Only use numeric IDs from the <prunable-tools> list."
         }
-        const allProtectedTools = [
-            ...config.strategies.discardTool.protectedTools,
-            ...config.strategies.extractTool.protectedTools
-        ]
+        const allProtectedTools = config.tools.settings.protectedTools
         if (allProtectedTools.includes(metadata.tool)) {
             logger.debug("Rejecting prune request - protected tool", { index, id, tool: metadata.tool })
             return "Invalid IDs provided. Only use numeric IDs from the <prunable-tools> list."
@@ -114,7 +111,7 @@ async function executePruneOperation(
         workingDirectory
     )
 
-    if (distillation && config.strategies.extractTool.showDistillation) {
+    if (distillation && config.tools.extract.showDistillation) {
         await sendDistillationNotification(
             client,
             logger,
