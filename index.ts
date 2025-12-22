@@ -1,9 +1,9 @@
-import type { Plugin } from "@opencode-ai/plugin";
-import { getConfig } from "./lib/config";
-import { Logger } from "./lib/logger";
-import { loadPrompt } from "./lib/prompt";
-import { createSessionState } from "./lib/state";
-import { createPruneTool } from "./lib/strategies";
+import type {Plugin} from "@opencode-ai/plugin";
+import {getConfig} from "./lib/config";
+import {Logger} from "./lib/logger";
+import {loadPrompt} from "./lib/prompt";
+import {createSessionState} from "./lib/state";
+import {createPruneTool} from "./lib/strategies";
 import {
   createChatMessageTransformHandler,
   createEventHandler,
@@ -39,6 +39,7 @@ const plugin: Plugin = (async (ctx) => {
     ui: [
       {
         name: "dcp-prune-summary",
+        inline: true,
         template: {
           type: "box",
           direction: "column",
@@ -203,8 +204,8 @@ const plugin: Plugin = (async (ctx) => {
           pending.items = event.data.items;
         } else if (event.event === "confirm-prune" && pending) {
           const confirmed = pending.items
-            .filter((i: { checked: boolean }) => i.checked)
-            .map((i: { id: string }) => i.id);
+            .filter((i: {checked: boolean}) => i.checked)
+            .map((i: {id: string}) => i.id);
           pending.resolve(confirmed);
           setPendingPrune(null);
         } else if (event.event === "cancel-prune" && pending) {
@@ -214,8 +215,8 @@ const plugin: Plugin = (async (ctx) => {
           // Enable auto-confirm and confirm this one
           setAutoConfirm(true);
           const confirmed = pending.items
-            .filter((i: { checked: boolean }) => i.checked)
-            .map((i: { id: string }) => i.id);
+            .filter((i: {checked: boolean}) => i.checked)
+            .map((i: {id: string}) => i.id);
           pending.resolve(confirmed);
           setPendingPrune(null);
         }
@@ -223,7 +224,7 @@ const plugin: Plugin = (async (ctx) => {
     },
     "experimental.chat.system.transform": async (
       _input: unknown,
-      output: { system: string[] },
+      output: {system: string[]}
     ) => {
       const syntheticPrompt = loadPrompt("prune-system-prompt");
       output.system.push(syntheticPrompt);
@@ -232,7 +233,7 @@ const plugin: Plugin = (async (ctx) => {
       ctx.client,
       state,
       logger,
-      config,
+      config
     ),
     tool: config.strategies.pruneTool.enabled
       ? {
@@ -256,7 +257,7 @@ const plugin: Plugin = (async (ctx) => {
           primary_tools: [...existingPrimaryTools, "prune"],
         };
         logger.info(
-          "Added 'prune' to experimental.primary_tools via config mutation",
+          "Added 'prune' to experimental.primary_tools via config mutation"
         );
       }
     },
@@ -266,7 +267,7 @@ const plugin: Plugin = (async (ctx) => {
       state,
       logger,
       ctx.directory,
-      () => setAutoConfirm(false),
+      () => setAutoConfirm(false)
     ),
   };
 }) satisfies Plugin;
