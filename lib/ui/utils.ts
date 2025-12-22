@@ -59,9 +59,13 @@ export function formatPrunedItemsList(
           shortenPath(paramKey, workingDirectory),
           60
         );
-        lines.push(`${metadata.tool}: ${displayKey}`);
+        const toolName =
+          metadata.tool.charAt(0).toUpperCase() + metadata.tool.slice(1);
+        lines.push(`${toolName}: ${displayKey}`);
       } else {
-        lines.push(`${metadata.tool}`);
+        const toolName =
+          metadata.tool.charAt(0).toUpperCase() + metadata.tool.slice(1);
+        lines.push(`${toolName}`);
       }
     }
   }
