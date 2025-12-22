@@ -39,6 +39,7 @@ const plugin: Plugin = (async (ctx) => {
     ui: [
       {
         name: "dcp-confirm",
+        replaceInput: true,
         template: {
           type: "box",
           direction: "column",
