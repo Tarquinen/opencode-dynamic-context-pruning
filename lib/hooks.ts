@@ -20,17 +20,19 @@ export function createChatMessageTransformHandler(
     ) => {
         await checkSession(client, state, logger, output.messages)
 
-        if (state.isSubAgent) {
-            return
-        }
-
+        // Sync tool cache for all sessions (needed for prune tool context)
         syncToolCache(state, config, logger, output.messages);
 
-        deduplicate(state, logger, config, output.messages)
-        supersedeWrites(state, logger, config, output.messages)
+        // Skip automatic pruning strategies for subagents to avoid conflicts
+        // but allow manual prune tool usage
+        if (!state.isSubAgent) {
+            deduplicate(state, logger, config, output.messages)
+            supersedeWrites(state, logger, config, output.messages)
+        }
 
+        // Apply pending prune actions and inject prune tool context for all sessions
+        // This ensures subagents can use the prune tool effectively
         prune(state, logger, config, output.messages)
-
         insertPruneToolContext(state, config, logger, output.messages)
     }
 }
