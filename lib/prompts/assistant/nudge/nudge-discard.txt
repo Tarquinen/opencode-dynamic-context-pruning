@@ -1,9 +1,0 @@
-<instruction name=context_management_required>
-**CRITICAL CONTEXT WARNING:** My context window is filling with tool outputs. I must adhere strictly to context hygiene.
-
-**Immediate Actions Required:**
-1. **Task Completion:** If a sub-task is complete, I will use the `discard` tool to remove the tools used.
-2. **Noise Removal:** If I read files or ran commands that yielded no value, I will use the `discard` tool to remove them.
-
-**Protocol:** I should prioritize this cleanup, but I will not interrupt a critical atomic operation if one is in progress. Once the immediate step is done, I must discard unneeded tool outputs.
-</instruction>

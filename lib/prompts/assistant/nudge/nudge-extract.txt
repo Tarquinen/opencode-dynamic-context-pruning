@@ -1,9 +1,0 @@
-<instruction name=context_management_required>
-**CRITICAL CONTEXT WARNING:** My context window is filling with tool outputs. I must adhere strictly to context hygiene.
-
-**Immediate Actions Required:**
-1. **Task Completion:** If I have completed work, I will extract key findings from the tools used. I will scale distillation depth to the value of the content.
-2. **Knowledge Preservation:** If I am holding valuable raw data I'll need to reference later, I will use the `extract` tool with high-fidelity distillation to preserve the insights and remove the raw entry.
-
-**Protocol:** I should prioritize this cleanup, but I will not interrupt a critical atomic operation if one is in progress. Once the immediate step is done, I must extract valuable findings from tool outputs.
-</instruction>

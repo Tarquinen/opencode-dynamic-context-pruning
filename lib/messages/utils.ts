@@ -1,7 +1,7 @@
 import { Logger } from "../logger"
 import { isMessageCompacted } from "../shared-utils"
 import type { SessionState, WithParts } from "../state"
-import type { AssistantMessage, UserMessage } from "@opencode-ai/sdk"
+import type { UserMessage } from "@opencode-ai/sdk"
 
 const SYNTHETIC_MESSAGE_ID = "msg_01234567890123456789012345"
 const SYNTHETIC_PART_ID = "prt_01234567890123456789012345"
@@ -24,37 +24,6 @@ export const createSyntheticUserMessage = (baseMessage: WithParts, content: stri
             {
                 id: SYNTHETIC_PART_ID,
                 sessionID: userInfo.sessionID,
-                messageID: SYNTHETIC_MESSAGE_ID,
-                type: "text",
-                text: content,
-            },
-        ],
-    }
-}
-
-export const createSyntheticAssistantMessage = (
-    baseMessage: WithParts,
-    content: string,
-): WithParts => {
-    const assistantInfo = baseMessage.info as AssistantMessage
-    return {
-        info: {
-            id: SYNTHETIC_MESSAGE_ID,
-            sessionID: assistantInfo.sessionID,
-            role: "assistant",
-            parentID: assistantInfo.parentID,
-            modelID: assistantInfo.modelID,
-            providerID: assistantInfo.providerID,
-            time: { created: Date.now() },
-            tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-            cost: 0,
-            path: assistantInfo.path,
-            mode: assistantInfo.mode,
-        },
-        parts: [
-            {
-                id: SYNTHETIC_PART_ID,
-                sessionID: assistantInfo.sessionID,
                 messageID: SYNTHETIC_MESSAGE_ID,
                 type: "text",
                 text: content,

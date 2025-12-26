@@ -2,13 +2,8 @@ import type { SessionState, WithParts } from "../state"
 import type { Logger } from "../logger"
 import type { PluginConfig } from "../config"
 import { loadPrompt } from "../prompt"
-import {
-    extractParameterKey,
-    buildToolIdList,
-    createSyntheticUserMessage,
-    createSyntheticAssistantMessage,
-} from "./utils"
-import { getLastAssistantMessage, getLastUserMessage, isMessageCompacted } from "../shared-utils"
+import { extractParameterKey, buildToolIdList, createSyntheticUserMessage } from "./utils"
+import { getLastUserMessage, isMessageCompacted } from "../shared-utils"
 
 const PRUNED_TOOL_INPUT_REPLACEMENT =
     "[content removed to save context, this is not what was written to the file, but a placeholder]"
@@ -16,32 +11,26 @@ const PRUNED_TOOL_OUTPUT_REPLACEMENT =
     "[Output removed to save context - information superseded or no longer needed]"
 const PRUNED_TOOL_ERROR_INPUT_REPLACEMENT = "[input removed due to failed tool call]"
 
-const getNudgeString = (config: PluginConfig, isReasoningModel: boolean): string => {
+const getNudgeString = (config: PluginConfig): string => {
     const discardEnabled = config.tools.discard.enabled
     const extractEnabled = config.tools.extract.enabled
-    const roleDir = isReasoningModel ? "user" : "assistant"
 
     if (discardEnabled && extractEnabled) {
-        return loadPrompt(`${roleDir}/nudge/nudge-both`)
+        return loadPrompt(`user/nudge/nudge-both`)
     } else if (discardEnabled) {
-        return loadPrompt(`${roleDir}/nudge/nudge-discard`)
+        return loadPrompt(`user/nudge/nudge-discard`)
     } else if (extractEnabled) {
-        return loadPrompt(`${roleDir}/nudge/nudge-extract`)
+        return loadPrompt(`user/nudge/nudge-extract`)
     }
     return ""
 }
 
-const wrapPrunableToolsUser = (content: string): string => `<prunable-tools>
+const wrapPrunableTools = (content: string): string => `<prunable-tools>
 The following tools have been invoked and are available for pruning. This list does not mandate immediate action. Consider your current goals and the resources you need before discarding valuable tool inputs or outputs. Consolidate your prunes for efficiency; it is rarely worth pruning a single tiny tool output. Keep the context free of noise.
 ${content}
 </prunable-tools>`
 
-const wrapPrunableToolsAssistant = (content: string): string => `<prunable-tools>
-I have the following tool outputs available for pruning. I should consider my current goals and the resources I need before discarding valuable inputs or outputs. I should consolidate prunes for efficiency; it is rarely worth pruning a single tiny tool output.
-${content}
-</prunable-tools>`
-
-const getCooldownMessage = (config: PluginConfig, isReasoningModel: boolean): string => {
+const getCooldownMessage = (config: PluginConfig): string => {
     const discardEnabled = config.tools.discard.enabled
     const extractEnabled = config.tools.extract.enabled
 
@@ -54,11 +43,9 @@ const getCooldownMessage = (config: PluginConfig, isReasoningModel: boolean): st
         toolName = "extract tool"
     }
 
-    const message = isReasoningModel
-        ? `Context management was just performed. Do not use the ${toolName} again. A fresh list will be available after your next tool use.`
-        : `I just performed context management. I will not use the ${toolName} again until after my next tool use, when a fresh list will be available.`
-
-    return `<prunable-tools>\n${message}\n</prunable-tools>`
+    return `<prunable-tools>
+Context management was just performed. Do not use the ${toolName} again. A fresh list will be available after your next tool use.
+</prunable-tools>`
 }
 
 const buildPrunableToolsList = (
@@ -74,10 +61,12 @@ const buildPrunableToolsList = (
         if (state.prune.toolIds.includes(toolCallId)) {
             return
         }
+
         const allProtectedTools = config.tools.settings.protectedTools
         if (allProtectedTools.includes(toolParameterEntry.tool)) {
             return
         }
+
         const numericId = toolIdList.indexOf(toolCallId)
         if (numericId === -1) {
             logger.warn(`Tool in cache but not in toolIdList - possible stale entry`, {
@@ -100,8 +89,7 @@ const buildPrunableToolsList = (
         return ""
     }
 
-    const wrapFn = state.isReasoningModel ? wrapPrunableToolsUser : wrapPrunableToolsAssistant
-    return wrapFn(lines.join("\n"))
+    return wrapPrunableTools(lines.join("\n"))
 }
 
 export const insertPruneToolContext = (
@@ -114,14 +102,11 @@ export const insertPruneToolContext = (
         return
     }
 
-    // For reasoning models, inject into user role; for non-reasoning, inject into assistant role
-    const isReasoningModel = state.isReasoningModel
-
     let prunableToolsContent: string
 
     if (state.lastToolPrune) {
         logger.debug("Last tool was prune - injecting cooldown message")
-        prunableToolsContent = getCooldownMessage(config, isReasoningModel)
+        prunableToolsContent = getCooldownMessage(config)
     } else {
         const prunableToolsList = buildPrunableToolsList(state, config, logger, messages)
         if (!prunableToolsList) {
@@ -136,25 +121,17 @@ export const insertPruneToolContext = (
             state.nudgeCounter >= config.tools.settings.nudgeFrequency
         ) {
             logger.info("Inserting prune nudge message")
-            nudgeString = "\n" + getNudgeString(config, isReasoningModel)
+            nudgeString = "\n" + getNudgeString(config)
         }
 
         prunableToolsContent = prunableToolsList + nudgeString
     }
 
-    if (isReasoningModel) {
-        const lastUserMessage = getLastUserMessage(messages)
-        if (!lastUserMessage) {
-            return
-        }
-        messages.push(createSyntheticUserMessage(lastUserMessage, prunableToolsContent))
-    } else {
-        const lastAssistantMessage = getLastAssistantMessage(messages)
-        if (!lastAssistantMessage) {
-            return
-        }
-        messages.push(createSyntheticAssistantMessage(lastAssistantMessage, prunableToolsContent))
+    const lastUserMessage = getLastUserMessage(messages)
+    if (!lastUserMessage) {
+        return
     }
+    messages.push(createSyntheticUserMessage(lastUserMessage, prunableToolsContent))
 }
 
 export const prune = (

@@ -1,5 +1,4 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import type { Model } from "@opencode-ai/sdk"
 import { getConfig } from "./lib/config"
 import { Logger } from "./lib/logger"
 import { loadPrompt } from "./lib/prompt"
@@ -27,22 +26,6 @@ const plugin: Plugin = (async (ctx) => {
     })
 
     return {
-        "chat.params": async (
-            input: { sessionID: string; agent: string; model: Model; provider: any; message: any },
-            _output: { temperature: number; topP: number; options: Record<string, any> },
-        ) => {
-            const isReasoning = input.model.capabilities?.reasoning ?? false
-            if (state.isReasoningModel !== isReasoning) {
-                logger.info(
-                    `Reasoning model status changed: ${state.isReasoningModel} -> ${isReasoning}`,
-                    {
-                        modelId: input.model.id,
-                        providerId: input.model.providerID,
-                    },
-                )
-            }
-            state.isReasoningModel = isReasoning
-        },
         "experimental.chat.system.transform": async (
             _input: unknown,
             output: { system: string[] },
@@ -50,17 +33,13 @@ const plugin: Plugin = (async (ctx) => {
             const discardEnabled = config.tools.discard.enabled
             const extractEnabled = config.tools.extract.enabled
 
-            // Use user-role prompts for reasoning models (second person),
-            // assistant-role prompts for non-reasoning models (first person)
-            const roleDir = state.isReasoningModel ? "user" : "assistant"
-
             let promptName: string
             if (discardEnabled && extractEnabled) {
-                promptName = `${roleDir}/system/system-prompt-both`
+                promptName = "user/system/system-prompt-both"
             } else if (discardEnabled) {
-                promptName = `${roleDir}/system/system-prompt-discard`
+                promptName = "user/system/system-prompt-discard"
             } else if (extractEnabled) {
-                promptName = `${roleDir}/system/system-prompt-extract`
+                promptName = "user/system/system-prompt-extract"
             } else {
                 return
             }
