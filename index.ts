@@ -33,15 +33,22 @@ const plugin: Plugin = (async (ctx) => {
             const discardEnabled = config.tools.discard.enabled
             const extractEnabled = config.tools.extract.enabled
 
+            if (!discardEnabled && !extractEnabled) {
+                return
+            }
+
+            const threshold = config.tools.settings.activationThreshold
+            if (state.thresholdState < threshold) {
+                return
+            }
+
             let promptName: string
             if (discardEnabled && extractEnabled) {
                 promptName = "user/system/system-prompt-both"
             } else if (discardEnabled) {
                 promptName = "user/system/system-prompt-discard"
-            } else if (extractEnabled) {
-                promptName = "user/system/system-prompt-extract"
             } else {
-                return
+                promptName = "user/system/system-prompt-extract"
             }
 
             const syntheticPrompt = loadPrompt(promptName)

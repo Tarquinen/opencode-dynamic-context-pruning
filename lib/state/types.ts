@@ -33,5 +33,6 @@ export interface SessionState {
     nudgeCounter: number
     lastToolPrune: boolean
     lastCompaction: number
-    currentTurn: number // Current turn count derived from step-start parts
+    currentTurn: number
+    thresholdState: number
 }

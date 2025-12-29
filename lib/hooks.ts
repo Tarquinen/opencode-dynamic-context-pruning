@@ -6,6 +6,7 @@ import { deduplicate, supersedeWrites, purgeErrors } from "./strategies"
 import { prune, insertPruneToolContext } from "./messages"
 import { checkSession } from "./state"
 import { runOnIdle } from "./strategies/on-idle"
+import { getThreshold } from "./shared-utils"
 
 export function createChatMessageTransformHandler(
     client: any,
@@ -27,6 +28,8 @@ export function createChatMessageTransformHandler(
         purgeErrors(state, logger, config, output.messages)
 
         prune(state, logger, config, output.messages)
+
+        state.thresholdState = getThreshold(state, output.messages)
 
         insertPruneToolContext(state, config, logger, output.messages)
 

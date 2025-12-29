@@ -102,6 +102,14 @@ export const insertPruneToolContext = (
         return
     }
 
+    const threshold = config.tools.settings.activationThreshold
+    if (state.thresholdState < threshold) {
+        logger.debug(
+            `Skipping prune context injection: ${state.thresholdState} tokens < ${threshold} threshold`,
+        )
+        return
+    }
+
     let prunableToolsContent: string
 
     if (state.lastToolPrune) {

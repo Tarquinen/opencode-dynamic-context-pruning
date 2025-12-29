@@ -30,6 +30,7 @@ export interface ToolSettings {
     nudgeEnabled: boolean
     nudgeFrequency: number
     protectedTools: string[]
+    activationThreshold: number
 }
 
 export interface Tools {
@@ -84,6 +85,7 @@ export const VALID_CONFIG_KEYS = new Set([
     "tools.settings.nudgeEnabled",
     "tools.settings.nudgeFrequency",
     "tools.settings.protectedTools",
+    "tools.settings.activationThreshold",
     "tools.discard",
     "tools.discard.enabled",
     "tools.extract",
@@ -214,6 +216,16 @@ function validateConfigTypes(config: Record<string, any>): ValidationError[] {
                     key: "tools.settings.protectedTools",
                     expected: "string[]",
                     actual: typeof tools.settings.protectedTools,
+                })
+            }
+            if (
+                tools.settings.minToolOutputTokens !== undefined &&
+                typeof tools.settings.minToolOutputTokens !== "number"
+            ) {
+                errors.push({
+                    key: "tools.settings.minToolOutputTokens",
+                    expected: "number",
+                    actual: typeof tools.settings.minToolOutputTokens,
                 })
             }
         }
@@ -437,6 +449,7 @@ const defaultConfig: PluginConfig = {
             nudgeEnabled: true,
             nudgeFrequency: 10,
             protectedTools: [...DEFAULT_PROTECTED_TOOLS],
+            activationThreshold: 5000,
         },
         discard: {
             enabled: true,
@@ -555,7 +568,9 @@ function createDefaultConfig(): void {
       "nudgeEnabled": true,
       "nudgeFrequency": 10,
       // Additional tools to protect from pruning
-      "protectedTools": []
+      "protectedTools": [],
+      // Minimum tool output tokens before injecting prune context
+      "activationThreshold": 5000
     },
     // Removes tool content from context without preservation (for completed tasks or noise)
     "discard": {
@@ -693,6 +708,8 @@ function mergeTools(
                     ...(override.settings?.protectedTools ?? []),
                 ]),
             ],
+            activationThreshold:
+                override.settings?.activationThreshold ?? base.settings.activationThreshold,
         },
         discard: {
             enabled: override.discard?.enabled ?? base.discard.enabled,

@@ -55,6 +55,7 @@ export function createSessionState(): SessionState {
         lastToolPrune: false,
         lastCompaction: 0,
         currentTurn: 0,
+        thresholdState: 0,
     }
 }
 
@@ -73,6 +74,7 @@ export function resetSessionState(state: SessionState): void {
     state.lastToolPrune = false
     state.lastCompaction = 0
     state.currentTurn = 0
+    state.thresholdState = 0
 }
 
 export async function ensureSessionInitialized(
