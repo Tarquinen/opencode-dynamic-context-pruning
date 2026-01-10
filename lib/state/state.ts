@@ -1,4 +1,4 @@
-import type { SessionState, ToolParameterEntry, WithParts } from "./types"
+import type { SessionState, ToolParameterEntry, WithParts, PinEntry } from "./types"
 import type { Logger } from "../logger"
 import { loadSessionState } from "./persistence"
 import { isSubAgentSession } from "./utils"
@@ -56,6 +56,8 @@ export function createSessionState(): SessionState {
         lastCompaction: 0,
         currentTurn: 0,
         variant: undefined,
+        pins: new Map<string, PinEntry>(),
+        lastAutoPruneTurn: 0,
     }
 }
 
@@ -75,6 +77,8 @@ export function resetSessionState(state: SessionState): void {
     state.lastCompaction = 0
     state.currentTurn = 0
     state.variant = undefined
+    state.pins.clear()
+    state.lastAutoPruneTurn = 0
 }
 
 export async function ensureSessionInitialized(
@@ -112,6 +116,14 @@ export async function ensureSessionInitialized(
     state.stats = {
         pruneTokenCounter: persisted.stats?.pruneTokenCounter || 0,
         totalPruneTokens: persisted.stats?.totalPruneTokens || 0,
+    }
+    state.lastAutoPruneTurn = persisted.lastAutoPruneTurn || 0
+
+    // Restore pins
+    if (persisted.pins && Array.isArray(persisted.pins)) {
+        for (const pin of persisted.pins) {
+            state.pins.set(pin.toolCallId, pin)
+        }
     }
 }
 

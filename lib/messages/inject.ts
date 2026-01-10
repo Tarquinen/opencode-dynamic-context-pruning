@@ -5,6 +5,7 @@ import type { UserMessage } from "@opencode-ai/sdk/v2"
 import { loadPrompt } from "../prompts"
 import { extractParameterKey, buildToolIdList, createSyntheticUserMessage } from "./utils"
 import { getLastUserMessage } from "../shared-utils"
+import { turnsUntilAutoPrune, shouldShowAutoPruneWarning } from "../strategies/auto-prune"
 
 const getNudgeString = (config: PluginConfig): string => {
     const discardEnabled = config.tools.discard.enabled
@@ -28,9 +29,12 @@ ${content}
 const getCooldownMessage = (config: PluginConfig): string => {
     const discardEnabled = config.tools.discard.enabled
     const extractEnabled = config.tools.extract.enabled
+    const pinEnabled = config.tools.pin.enabled
 
     let toolName: string
-    if (discardEnabled && extractEnabled) {
+    if (pinEnabled) {
+        toolName = extractEnabled ? "pin or extract tools" : "pin tool"
+    } else if (discardEnabled && extractEnabled) {
         toolName = "discard or extract tools"
     } else if (discardEnabled) {
         toolName = "discard tool"
@@ -43,6 +47,16 @@ Context management was just performed. Do not use the ${toolName} again. A fresh
 </prunable-tools>`
 }
 
+const getAutoPruneWarningMessage = (state: SessionState, config: PluginConfig): string => {
+    const turns = turnsUntilAutoPrune(state, config)
+    const pinnedCount = state.pins.size
+
+    return `<auto-prune-warning>
+Auto-prune in ${turns} turn(s). All unpinned tool outputs will be discarded.
+Currently ${pinnedCount} tool(s) pinned. Use the \`pin\` tool NOW to preserve any context you need.
+</auto-prune-warning>`
+}
+
 const buildPrunableToolsList = (
     state: SessionState,
     config: PluginConfig,
@@ -51,6 +65,7 @@ const buildPrunableToolsList = (
 ): string => {
     const lines: string[] = []
     const toolIdList: string[] = buildToolIdList(state, messages, logger)
+    const pinningModeEnabled = config.tools.pinningMode.enabled
 
     state.toolParameters.forEach((toolParameterEntry, toolCallId) => {
         if (state.prune.toolIds.includes(toolCallId)) {
@@ -74,7 +89,18 @@ const buildPrunableToolsList = (
         const description = paramKey
             ? `${toolParameterEntry.tool}, ${paramKey}`
             : toolParameterEntry.tool
-        lines.push(`${numericId}: ${description}`)
+
+        // Show pin status in pinning mode
+        let line = `${numericId}: ${description}`
+        if (pinningModeEnabled) {
+            const pin = state.pins.get(toolCallId)
+            if (pin) {
+                const turnsRemaining = pin.expiresAtTurn - state.currentTurn
+                line += ` [PINNED, expires in ${turnsRemaining} turn(s)]`
+            }
+        }
+
+        lines.push(line)
         logger.debug(
             `Prunable tool found - ID: ${numericId}, Tool: ${toolParameterEntry.tool}, Call ID: ${toolCallId}`,
         )
@@ -93,7 +119,12 @@ export const insertPruneToolContext = (
     logger: Logger,
     messages: WithParts[],
 ): void => {
-    if (!config.tools.discard.enabled && !config.tools.extract.enabled) {
+    const pinEnabled = config.tools.pin.enabled
+    const discardEnabled = config.tools.discard.enabled
+    const extractEnabled = config.tools.extract.enabled
+
+    // Need at least one pruning tool enabled
+    if (!pinEnabled && !discardEnabled && !extractEnabled) {
         return
     }
 
@@ -111,7 +142,9 @@ export const insertPruneToolContext = (
         logger.debug("prunable-tools: \n" + prunableToolsList)
 
         let nudgeString = ""
+        // Only show nudge in non-pinning mode
         if (
+            !config.tools.pinningMode.enabled &&
             config.tools.settings.nudgeEnabled &&
             state.nudgeCounter >= config.tools.settings.nudgeFrequency
         ) {
@@ -119,7 +152,14 @@ export const insertPruneToolContext = (
             nudgeString = "\n" + getNudgeString(config)
         }
 
-        prunableToolsContent = prunableToolsList + nudgeString
+        // Add auto-prune warning if approaching prune cycle
+        let warningString = ""
+        if (shouldShowAutoPruneWarning(state, config)) {
+            logger.info("Inserting auto-prune warning message")
+            warningString = "\n" + getAutoPruneWarningMessage(state, config)
+        }
+
+        prunableToolsContent = prunableToolsList + nudgeString + warningString
     }
 
     const lastUserMessage = getLastUserMessage(messages)

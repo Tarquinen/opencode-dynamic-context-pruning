@@ -1,0 +1,39 @@
+Pin tool outputs to protect them from automatic pruning.
+
+## IMPORTANT: The Prunable List
+A `<prunable-tools>` list is provided to you showing available tool outputs you can pin. Each line has the format `ID: tool, parameter` (e.g., `20: read, /path/to/file.ts`). You MUST only use numeric IDs that appear in this list.
+
+## When to Use This Tool
+
+Use `pin` to preserve context you'll need for upcoming work:
+
+- **Active work:** Files you're about to edit or reference
+- **Key context:** Important information needed for the current task
+- **Dependencies:** Code or data that informs your next steps
+
+## When NOT to Use This Tool
+
+- **Completed work:** If you're done with the context and won't need it again
+- **Noise:** Irrelevant or superseded outputs - let them be auto-pruned
+
+## Pin Expiration
+
+Pins expire automatically after a set number of turns. You don't need to unpin - just let pins expire naturally. If you pin something that's already pinned, its expiration will be extended.
+
+## Best Practices
+
+- **Pin sparingly:** Only pin what you actively need - unpinned outputs will be discarded at the next auto-prune cycle
+- **Think ahead:** Before the auto-prune warning, consider what context you'll need for upcoming work
+- **Let go:** When work is complete, let the context be auto-pruned rather than pinning everything
+
+## Format
+
+- `ids`: Array of numeric IDs as strings from the `<prunable-tools>` list
+
+## Example
+
+```
+Assistant: [Sees auto-prune warning, reviews prunable tools]
+I need to keep the auth service file since I'm about to modify it.
+[Uses pin with ids: ["10", "15"]]
+```

@@ -2,7 +2,7 @@ import type { SessionState, WithParts } from "./state"
 import type { Logger } from "./logger"
 import type { PluginConfig } from "./config"
 import { syncToolCache } from "./state/tool-cache"
-import { deduplicate, supersedeWrites, purgeErrors } from "./strategies"
+import { deduplicate, supersedeWrites, purgeErrors, autoPrune } from "./strategies"
 import { prune, insertPruneToolContext } from "./messages"
 import { checkSession } from "./state"
 
@@ -11,6 +11,7 @@ export function createChatMessageTransformHandler(
     state: SessionState,
     logger: Logger,
     config: PluginConfig,
+    workingDirectory: string,
 ) {
     return async (input: {}, output: { messages: WithParts[] }) => {
         await checkSession(client, state, logger, output.messages)
@@ -24,6 +25,11 @@ export function createChatMessageTransformHandler(
         deduplicate(state, logger, config, output.messages)
         supersedeWrites(state, logger, config, output.messages)
         purgeErrors(state, logger, config, output.messages)
+
+        // Run auto-prune if pinning mode is enabled
+        if (config.tools.pinningMode.enabled) {
+            await autoPrune(client, state, logger, config, output.messages, workingDirectory)
+        }
 
         prune(state, logger, config, output.messages)
 

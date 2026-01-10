@@ -1,4 +1,5 @@
 export { deduplicate } from "./deduplication"
-export { createDiscardTool, createExtractTool } from "./tools"
+export { createDiscardTool, createExtractTool, createPinTool } from "./tools"
 export { supersedeWrites } from "./supersede-writes"
 export { purgeErrors } from "./purge-errors"
+export { autoPrune, turnsUntilAutoPrune, shouldShowAutoPruneWarning } from "./auto-prune"
