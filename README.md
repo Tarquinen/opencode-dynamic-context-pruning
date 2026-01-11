@@ -130,6 +130,35 @@ DCP uses its own config file:
 
 When enabled, turn protection prevents tool outputs from being pruned for a configurable number of message turns. This gives the AI time to reference recent tool outputs before they become prunable. Applies to both `discard` and `extract` tools, as well as automatic strategies.
 
+### Protected File Patterns
+
+`protectedFilePatterns` is a list of glob patterns matched against `tool parameters.filePath` (e.g. `read`/`write`/`edit` calls).
+
+When a tool call matches a protected pattern:
+
+- It will not appear in the `<prunable-tools>` list.
+- `discard` / `extract` will reject attempts to prune it.
+- Automatic strategies (deduplication, supersede-writes, purge-errors) will not prune it.
+
+Supported glob tokens:
+
+- `*` matches any characters except `/`
+- `?` matches a single character except `/`
+- `**` matches across `/` (e.g. `**/*.ts`)
+
+Examples:
+
+- `**/*.env` (protect env files)
+- `**/.opencode/**` (protect project opencode configs)
+- `**/credentials.*` (protect credential files)
+
+### Nudge Reminders
+
+When `tools.settings.nudgeEnabled` is true, DCP injects a short “use prune tools” reminder into the `<prunable-tools>` message:
+
+- Every `tools.settings.nudgeFrequency` tool results.
+- Also after a `todowrite` call transitions an existing todo to `status: "completed"`.
+
 ### Protected Tools
 
 By default, these tools are always protected from pruning across all strategies:
