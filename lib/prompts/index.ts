@@ -1,8 +1,11 @@
 import { readFileSync } from "fs"
-import { join } from "path"
+import { dirname, join } from "path"
+import { fileURLToPath } from "url"
+
+const PROMPTS_DIR = dirname(fileURLToPath(import.meta.url))
 
 export function loadPrompt(name: string, vars?: Record<string, string>): string {
-    const filePath = join(__dirname, `${name}.txt`)
+    const filePath = join(PROMPTS_DIR, `${name}.txt`)
     let content = readFileSync(filePath, "utf8").trim()
     if (vars) {
         for (const [key, value] of Object.entries(vars)) {

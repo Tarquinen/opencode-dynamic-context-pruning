@@ -35,4 +35,7 @@ export interface SessionState {
     lastCompaction: number
     currentTurn: number
     variant: string | undefined
+
+    todoStatusById: Map<string, string>
+    todoCompletionNudgePending: boolean
 }

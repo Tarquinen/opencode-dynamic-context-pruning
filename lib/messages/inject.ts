@@ -117,12 +117,18 @@ export const insertPruneToolContext = (
         logger.debug("prunable-tools: \n" + prunableToolsList)
 
         let nudgeString = ""
-        if (
+        const shouldNudge =
             config.tools.settings.nudgeEnabled &&
-            state.nudgeCounter >= config.tools.settings.nudgeFrequency
-        ) {
+            (state.nudgeCounter >= config.tools.settings.nudgeFrequency ||
+                state.todoCompletionNudgePending)
+
+        if (shouldNudge) {
             logger.info("Inserting prune nudge message")
             nudgeString = "\n" + getNudgeString(config)
+
+            if (state.todoCompletionNudgePending) {
+                state.todoCompletionNudgePending = false
+            }
         }
 
         prunableToolsContent = prunableToolsList + nudgeString

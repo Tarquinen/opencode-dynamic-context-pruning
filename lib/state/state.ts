@@ -31,6 +31,8 @@ export const checkSession = async (
         state.lastCompaction = lastCompactionTimestamp
         state.toolParameters.clear()
         state.prune.toolIds = []
+        state.todoStatusById.clear()
+        state.todoCompletionNudgePending = false
         logger.info("Detected compaction from messages - cleared tool cache", {
             timestamp: lastCompactionTimestamp,
         })
@@ -56,6 +58,9 @@ export function createSessionState(): SessionState {
         lastCompaction: 0,
         currentTurn: 0,
         variant: undefined,
+
+        todoStatusById: new Map<string, string>(),
+        todoCompletionNudgePending: false,
     }
 }
 
@@ -75,6 +80,9 @@ export function resetSessionState(state: SessionState): void {
     state.lastCompaction = 0
     state.currentTurn = 0
     state.variant = undefined
+
+    state.todoStatusById.clear()
+    state.todoCompletionNudgePending = false
 }
 
 export async function ensureSessionInitialized(
@@ -101,6 +109,8 @@ export async function ensureSessionInitialized(
     state.lastCompaction = findLastCompactionTimestamp(messages)
     state.currentTurn = countTurns(state, messages)
 
+    seedTodoStatusFromMessages(state, messages)
+
     const persisted = await loadSessionState(sessionId, logger)
     if (persisted === null) {
         return
@@ -112,6 +122,28 @@ export async function ensureSessionInitialized(
     state.stats = {
         pruneTokenCounter: persisted.stats?.pruneTokenCounter || 0,
         totalPruneTokens: persisted.stats?.totalPruneTokens || 0,
+    }
+}
+
+function seedTodoStatusFromMessages(state: SessionState, messages: WithParts[]): void {
+    for (const msg of messages) {
+        if (isMessageCompacted(state, msg)) {
+            continue
+        }
+        for (const part of msg.parts) {
+            if (part.type !== "tool" || part.tool !== "todowrite") {
+                continue
+            }
+            const todos = (part.state?.input as any)?.todos
+            if (!Array.isArray(todos)) {
+                continue
+            }
+            for (const todo of todos) {
+                if (todo && typeof todo.id === "string" && typeof todo.status === "string") {
+                    state.todoStatusById.set(todo.id, todo.status)
+                }
+            }
+        }
     }
 }
 

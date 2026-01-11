@@ -60,6 +60,30 @@ export async function syncToolCache(
                     continue
                 }
 
+                if (part.tool === "todowrite") {
+                    const todos = (part.state?.input as any)?.todos
+                    if (Array.isArray(todos)) {
+                        for (const todo of todos) {
+                            if (
+                                !todo ||
+                                typeof todo.id !== "string" ||
+                                typeof todo.status !== "string"
+                            ) {
+                                continue
+                            }
+                            const previousStatus = state.todoStatusById.get(todo.id)
+                            if (
+                                previousStatus !== undefined &&
+                                previousStatus !== "completed" &&
+                                todo.status === "completed"
+                            ) {
+                                state.todoCompletionNudgePending = true
+                            }
+                            state.todoStatusById.set(todo.id, todo.status)
+                        }
+                    }
+                }
+
                 state.toolParameters.set(part.callID, {
                     tool: part.tool,
                     parameters: part.state?.input ?? {},
