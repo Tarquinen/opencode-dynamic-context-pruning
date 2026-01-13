@@ -18,6 +18,17 @@ export interface ExtractTool {
     showDistillation: boolean
 }
 
+export interface PinTool {
+    enabled: boolean
+}
+
+export interface PinningMode {
+    enabled: boolean
+    pruneFrequency: number // Auto-prune every N turns
+    pinDuration: number // Pins expire after M turns
+    warningTurns: number // Warn N turns before auto-prune
+}
+
 export interface ToolSettings {
     nudgeEnabled: boolean
     nudgeFrequency: number
@@ -28,6 +39,8 @@ export interface Tools {
     settings: ToolSettings
     discard: DiscardTool
     extract: ExtractTool
+    pin: PinTool
+    pinningMode: PinningMode
 }
 
 export interface SupersedeWrites {
@@ -92,6 +105,13 @@ export const VALID_CONFIG_KEYS = new Set([
     "tools.extract",
     "tools.extract.enabled",
     "tools.extract.showDistillation",
+    "tools.pin",
+    "tools.pin.enabled",
+    "tools.pinningMode",
+    "tools.pinningMode.enabled",
+    "tools.pinningMode.pruneFrequency",
+    "tools.pinningMode.pinDuration",
+    "tools.pinningMode.warningTurns",
     "strategies",
     // strategies.deduplication
     "strategies.deduplication",
@@ -257,6 +277,57 @@ function validateConfigTypes(config: Record<string, any>): ValidationError[] {
                 })
             }
         }
+        if (tools.pin) {
+            if (tools.pin.enabled !== undefined && typeof tools.pin.enabled !== "boolean") {
+                errors.push({
+                    key: "tools.pin.enabled",
+                    expected: "boolean",
+                    actual: typeof tools.pin.enabled,
+                })
+            }
+        }
+        if (tools.pinningMode) {
+            if (
+                tools.pinningMode.enabled !== undefined &&
+                typeof tools.pinningMode.enabled !== "boolean"
+            ) {
+                errors.push({
+                    key: "tools.pinningMode.enabled",
+                    expected: "boolean",
+                    actual: typeof tools.pinningMode.enabled,
+                })
+            }
+            if (
+                tools.pinningMode.pruneFrequency !== undefined &&
+                typeof tools.pinningMode.pruneFrequency !== "number"
+            ) {
+                errors.push({
+                    key: "tools.pinningMode.pruneFrequency",
+                    expected: "number",
+                    actual: typeof tools.pinningMode.pruneFrequency,
+                })
+            }
+            if (
+                tools.pinningMode.pinDuration !== undefined &&
+                typeof tools.pinningMode.pinDuration !== "number"
+            ) {
+                errors.push({
+                    key: "tools.pinningMode.pinDuration",
+                    expected: "number",
+                    actual: typeof tools.pinningMode.pinDuration,
+                })
+            }
+            if (
+                tools.pinningMode.warningTurns !== undefined &&
+                typeof tools.pinningMode.warningTurns !== "number"
+            ) {
+                errors.push({
+                    key: "tools.pinningMode.warningTurns",
+                    expected: "number",
+                    actual: typeof tools.pinningMode.warningTurns,
+                })
+            }
+        }
     }
 
     // Strategies validators
@@ -404,6 +475,15 @@ const defaultConfig: PluginConfig = {
             enabled: true,
             showDistillation: false,
         },
+        pin: {
+            enabled: false,
+        },
+        pinningMode: {
+            enabled: false,
+            pruneFrequency: 10,
+            pinDuration: 8,
+            warningTurns: 2,
+        },
     },
     strategies: {
         deduplication: {
@@ -523,6 +603,20 @@ function createDefaultConfig(): void {
       "enabled": true,
       // Show distillation content as an ignored message notification
       "showDistillation": false
+    },
+    // Pin tool to protect context from auto-pruning (used with pinningMode)
+    "pin": {
+      "enabled": false
+    },
+    // Pinning mode: auto-prune everything not pinned every N turns
+    "pinningMode": {
+      "enabled": false,
+      // Auto-prune every N turns
+      "pruneFrequency": 10,
+      // Pins expire after M turns
+      "pinDuration": 8,
+      // Warn N turns before auto-prune
+      "warningTurns": 2
     }
   },
   // Automatic pruning strategies
@@ -632,6 +726,15 @@ function mergeTools(
             enabled: override.extract?.enabled ?? base.extract.enabled,
             showDistillation: override.extract?.showDistillation ?? base.extract.showDistillation,
         },
+        pin: {
+            enabled: override.pin?.enabled ?? base.pin.enabled,
+        },
+        pinningMode: {
+            enabled: override.pinningMode?.enabled ?? base.pinningMode.enabled,
+            pruneFrequency: override.pinningMode?.pruneFrequency ?? base.pinningMode.pruneFrequency,
+            pinDuration: override.pinningMode?.pinDuration ?? base.pinningMode.pinDuration,
+            warningTurns: override.pinningMode?.warningTurns ?? base.pinningMode.warningTurns,
+        },
     }
 }
 
@@ -647,6 +750,8 @@ function deepCloneConfig(config: PluginConfig): PluginConfig {
             },
             discard: { ...config.tools.discard },
             extract: { ...config.tools.extract },
+            pin: { ...config.tools.pin },
+            pinningMode: { ...config.tools.pinningMode },
         },
         strategies: {
             deduplication: {

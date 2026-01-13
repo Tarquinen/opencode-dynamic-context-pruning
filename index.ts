@@ -3,7 +3,7 @@ import { getConfig } from "./lib/config"
 import { Logger } from "./lib/logger"
 import { loadPrompt } from "./lib/prompts"
 import { createSessionState } from "./lib/state"
-import { createDiscardTool, createExtractTool } from "./lib/strategies"
+import { createDiscardTool, createExtractTool, createPinTool } from "./lib/strategies"
 import { createChatMessageTransformHandler } from "./lib/hooks"
 
 const plugin: Plugin = (async (ctx) => {
@@ -43,9 +43,16 @@ const plugin: Plugin = (async (ctx) => {
 
             const discardEnabled = config.tools.discard.enabled
             const extractEnabled = config.tools.extract.enabled
+            const pinEnabled = config.tools.pin.enabled
+            const pinningModeEnabled = config.tools.pinningMode.enabled
 
             let promptName: string
-            if (discardEnabled && extractEnabled) {
+            if (pinningModeEnabled || pinEnabled) {
+                // Pinning mode: use pin prompt (with optional extract)
+                promptName = extractEnabled
+                    ? "user/system/system-prompt-pin-extract"
+                    : "user/system/system-prompt-pin"
+            } else if (discardEnabled && extractEnabled) {
                 promptName = "user/system/system-prompt-both"
             } else if (discardEnabled) {
                 promptName = "user/system/system-prompt-discard"
@@ -63,6 +70,7 @@ const plugin: Plugin = (async (ctx) => {
             state,
             logger,
             config,
+            ctx.directory,
         ),
         "chat.message": async (
             input: {
@@ -80,8 +88,20 @@ const plugin: Plugin = (async (ctx) => {
             logger.debug("Cached variant from chat.message hook", { variant: input.variant })
         },
         tool: {
-            ...(config.tools.discard.enabled && {
-                discard: createDiscardTool({
+            // Discard tool only available in non-pinning mode
+            ...(!config.tools.pinningMode.enabled &&
+                config.tools.discard.enabled && {
+                    discard: createDiscardTool({
+                        client: ctx.client,
+                        state,
+                        logger,
+                        config,
+                        workingDirectory: ctx.directory,
+                    }),
+                }),
+            // Extract tool available in both modes
+            ...(config.tools.extract.enabled && {
+                extract: createExtractTool({
                     client: ctx.client,
                     state,
                     logger,
@@ -89,8 +109,9 @@ const plugin: Plugin = (async (ctx) => {
                     workingDirectory: ctx.directory,
                 }),
             }),
-            ...(config.tools.extract.enabled && {
-                extract: createExtractTool({
+            // Pin tool only available in pinning mode
+            ...(config.tools.pin.enabled && {
+                pin: createPinTool({
                     client: ctx.client,
                     state,
                     logger,
@@ -103,7 +124,12 @@ const plugin: Plugin = (async (ctx) => {
             // Add enabled tools to primary_tools by mutating the opencode config
             // This works because config is cached and passed by reference
             const toolsToAdd: string[] = []
-            if (config.tools.discard.enabled) toolsToAdd.push("discard")
+            // In pinning mode, add pin instead of discard
+            if (config.tools.pinningMode.enabled) {
+                if (config.tools.pin.enabled) toolsToAdd.push("pin")
+            } else {
+                if (config.tools.discard.enabled) toolsToAdd.push("discard")
+            }
             if (config.tools.extract.enabled) toolsToAdd.push("extract")
 
             if (toolsToAdd.length > 0) {

@@ -9,11 +9,12 @@ import {
 import { ToolParameterEntry } from "../state"
 import { PluginConfig } from "../config"
 
-export type PruneReason = "completion" | "noise" | "extraction"
+export type PruneReason = "completion" | "noise" | "extraction" | "auto-prune"
 export const PRUNE_REASON_LABELS: Record<PruneReason, string> = {
     completion: "Task Complete",
     noise: "Noise Removal",
     extraction: "Extraction",
+    "auto-prune": "Auto-Prune",
 }
 
 function buildMinimalMessage(
@@ -89,6 +90,74 @@ export async function sendUnifiedNotification(
 
     await sendIgnoredMessage(client, sessionId, message, params, logger)
     return true
+}
+
+export async function sendAutoPruneNotification(
+    client: any,
+    logger: Logger,
+    config: PluginConfig,
+    state: SessionState,
+    sessionId: string,
+    pruneToolIds: string[],
+    toolMetadata: Map<string, ToolParameterEntry>,
+    params: any,
+    workingDirectory: string,
+): Promise<boolean> {
+    if (pruneToolIds.length === 0) {
+        return false
+    }
+
+    if (config.pruneNotification === "off") {
+        return false
+    }
+
+    const pinnedCount = state.pins.size
+    const prunedCount = pruneToolIds.length
+
+    const message =
+        config.pruneNotification === "minimal"
+            ? buildMinimalAutoPruneMessage(state, prunedCount, pinnedCount)
+            : buildDetailedAutoPruneMessage(
+                  state,
+                  prunedCount,
+                  pinnedCount,
+                  pruneToolIds,
+                  toolMetadata,
+                  workingDirectory,
+              )
+
+    await sendIgnoredMessage(client, sessionId, message, params, logger)
+    return true
+}
+
+function buildMinimalAutoPruneMessage(
+    state: SessionState,
+    prunedCount: number,
+    pinnedCount: number,
+): string {
+    return (
+        formatStatsHeader(state.stats.totalPruneTokens, state.stats.pruneTokenCounter) +
+        ` — Auto-Prune: ${prunedCount} discarded, ${pinnedCount} pinned`
+    )
+}
+
+function buildDetailedAutoPruneMessage(
+    state: SessionState,
+    prunedCount: number,
+    pinnedCount: number,
+    pruneToolIds: string[],
+    toolMetadata: Map<string, ToolParameterEntry>,
+    workingDirectory?: string,
+): string {
+    let message = formatStatsHeader(state.stats.totalPruneTokens, state.stats.pruneTokenCounter)
+
+    const pruneTokenCounterStr = `~${formatTokenCount(state.stats.pruneTokenCounter)}`
+    message += `\n\n▣ Auto-Prune (${pruneTokenCounterStr}) — ${prunedCount} discarded, ${pinnedCount} pinned`
+
+    const itemLines = formatPrunedItemsList(pruneToolIds, toolMetadata, workingDirectory)
+    message += "\n" + itemLines.join("\n")
+
+    return message.trim()
 }
 
 export async function sendIgnoredMessage(

@@ -8,7 +8,7 @@ import * as fs from "fs/promises"
 import { existsSync } from "fs"
 import { homedir } from "os"
 import { join } from "path"
-import type { SessionState, SessionStats, Prune } from "./types"
+import type { SessionState, SessionStats, Prune, PinEntry } from "./types"
 import type { Logger } from "../logger"
 
 export interface PersistedSessionState {
@@ -16,6 +16,8 @@ export interface PersistedSessionState {
     prune: Prune
     stats: SessionStats
     lastUpdated: string
+    pins?: PinEntry[]
+    lastAutoPruneTurn?: number
 }
 
 const STORAGE_DIR = join(homedir(), ".local", "share", "opencode", "storage", "plugin", "dcp")
@@ -47,6 +49,8 @@ export async function saveSessionState(
             prune: sessionState.prune,
             stats: sessionState.stats,
             lastUpdated: new Date().toISOString(),
+            pins: Array.from(sessionState.pins.values()),
+            lastAutoPruneTurn: sessionState.lastAutoPruneTurn,
         }
 
         const filePath = getSessionFilePath(sessionState.sessionId)

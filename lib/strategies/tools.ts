@@ -13,6 +13,7 @@ import { getFilePathFromParameters, isProtectedFilePath } from "../protected-fil
 
 const DISCARD_TOOL_DESCRIPTION = loadPrompt("discard-tool-spec")
 const EXTRACT_TOOL_DESCRIPTION = loadPrompt("extract-tool-spec")
+const PIN_TOOL_DESCRIPTION = loadPrompt("pin-tool-spec")
 
 export interface PruneToolContext {
     client: any
@@ -201,6 +202,114 @@ export function createExtractTool(ctx: PruneToolContext): ReturnType<typeof tool
                 "Extract",
                 args.distillation,
             )
+        },
+    })
+}
+
+export function createPinTool(ctx: PruneToolContext): ReturnType<typeof tool> {
+    return tool({
+        description: PIN_TOOL_DESCRIPTION,
+        args: {
+            ids: tool.schema
+                .array(tool.schema.string())
+                .describe("Numeric IDs as strings to pin from the <prunable-tools> list"),
+        },
+        async execute(args, toolCtx) {
+            const { client, state, logger, config } = ctx
+            const sessionId = toolCtx.sessionID
+
+            logger.info("Pin tool invoked")
+            logger.info(JSON.stringify({ ids: args.ids }))
+
+            if (!args.ids || args.ids.length === 0) {
+                logger.debug("Pin tool called but ids is empty or undefined")
+                return "No IDs provided. Check the <prunable-tools> list for available IDs to pin."
+            }
+
+            const numericToolIds: number[] = args.ids
+                .map((id) => parseInt(id, 10))
+                .filter((n): n is number => !isNaN(n))
+
+            if (numericToolIds.length === 0) {
+                logger.debug("No numeric tool IDs provided for Pin: " + JSON.stringify(args.ids))
+                return "No numeric IDs provided. Format: ids: [\"1\", \"2\", ...]"
+            }
+
+            // Fetch messages to resolve tool IDs
+            const messagesResponse = await client.session.messages({
+                path: { id: sessionId },
+            })
+            const messages: WithParts[] = messagesResponse.data || messagesResponse
+
+            await ensureSessionInitialized(client, state, sessionId, logger, messages)
+
+            const toolIdList: string[] = buildToolIdList(state, messages, logger)
+
+            // Validate that all numeric IDs are within bounds
+            if (numericToolIds.some((id) => id < 0 || id >= toolIdList.length)) {
+                logger.debug("Invalid tool IDs provided: " + numericToolIds.join(", "))
+                return "Invalid IDs provided. Only use numeric IDs from the <prunable-tools> list."
+            }
+
+            const pinDuration = config.tools.pinningMode.pinDuration
+            const pinnedTools: string[] = []
+            const extendedTools: string[] = []
+
+            for (const index of numericToolIds) {
+                const toolCallId = toolIdList[index]
+                const metadata = state.toolParameters.get(toolCallId)
+
+                if (!metadata) {
+                    logger.debug("Tool ID not in cache", { index, toolCallId })
+                    continue
+                }
+
+                // Check if protected
+                const allProtectedTools = config.tools.settings.protectedTools
+                if (allProtectedTools.includes(metadata.tool)) {
+                    logger.debug("Skipping protected tool", { index, tool: metadata.tool })
+                    continue
+                }
+
+                const existingPin = state.pins.get(toolCallId)
+                const newExpiresAt = state.currentTurn + pinDuration
+
+                if (existingPin) {
+                    // Extend the pin
+                    existingPin.expiresAtTurn = newExpiresAt
+                    extendedTools.push(`${index}: ${metadata.tool}`)
+                    logger.info(`Extended pin for tool ${index} until turn ${newExpiresAt}`)
+                } else {
+                    // Create new pin
+                    state.pins.set(toolCallId, {
+                        toolCallId,
+                        pinnedAtTurn: state.currentTurn,
+                        expiresAtTurn: newExpiresAt,
+                    })
+                    pinnedTools.push(`${index}: ${metadata.tool}`)
+                    logger.info(`Pinned tool ${index} until turn ${newExpiresAt}`)
+                }
+            }
+
+            // Persist state
+            saveSessionState(state, logger).catch((err) =>
+                logger.error("Failed to persist state", { error: err.message }),
+            )
+
+            // Build result message
+            const results: string[] = []
+            if (pinnedTools.length > 0) {
+                results.push(`Pinned ${pinnedTools.length} tool(s): ${pinnedTools.join(", ")}`)
+            }
+            if (extendedTools.length > 0) {
+                results.push(`Extended ${extendedTools.length} pin(s): ${extendedTools.join(", ")}`)
+            }
+
+            if (results.length === 0) {
+                return "No tools were pinned. Check the IDs are valid and not protected."
+            }
+
+            return `${results.join(". ")}. Pins expire in ${pinDuration} turns.`
         },
     })
 }

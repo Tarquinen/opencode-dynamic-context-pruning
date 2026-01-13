@@ -24,6 +24,12 @@ export interface Prune {
     toolIds: string[]
 }
 
+export interface PinEntry {
+    toolCallId: string
+    pinnedAtTurn: number
+    expiresAtTurn: number
+}
+
 export interface SessionState {
     sessionId: string | null
     isSubAgent: boolean
@@ -35,4 +41,6 @@ export interface SessionState {
     lastCompaction: number
     currentTurn: number
     variant: string | undefined
+    pins: Map<string, PinEntry>
+    lastAutoPruneTurn: number
 }
