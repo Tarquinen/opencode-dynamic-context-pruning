@@ -193,3 +193,37 @@ export function buildToolIdList(
     }
     return toolIds
 }
+
+export const isIgnoredUserMessage = (message: WithParts): boolean => {
+    if (!message.parts || message.parts.length === 0) {
+        return true
+    }
+
+    for (const part of message.parts) {
+        if (!(part as any).ignored) {
+            return false
+        }
+    }
+
+    return true
+}
+
+export const hasReasoningInCurrentAssistantTurn = (messages: WithParts[]): boolean => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const message = messages[i]
+        if (message.info?.role === "user") {
+            if (isIgnoredUserMessage(message)) {
+                continue
+            }
+            return false
+        }
+        if (message.info?.role === "assistant" && message.parts) {
+            for (const part of message.parts) {
+                if (part.type === "reasoning") {
+                    return true
+                }
+            }
+        }
+    }
+    return false
+}
