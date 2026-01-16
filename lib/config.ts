@@ -45,6 +45,19 @@ export interface TurnProtection {
     turns: number
 }
 
+export interface PreemptiveCompactionTruncation {
+    enabled: boolean
+    protectedMessages: number
+}
+
+export interface PreemptiveCompaction {
+    enabled: boolean
+    threshold: number
+    cooldownMs: number
+    minTokens: number
+    truncation: PreemptiveCompactionTruncation
+}
+
 export interface PluginConfig {
     enabled: boolean
     debug: boolean
@@ -57,6 +70,7 @@ export interface PluginConfig {
         supersedeWrites: SupersedeWrites
         purgeErrors: PurgeErrors
     }
+    preemptiveCompaction: PreemptiveCompaction
 }
 
 const DEFAULT_PROTECTED_TOOLS = [
@@ -107,6 +121,15 @@ export const VALID_CONFIG_KEYS = new Set([
     "strategies.purgeErrors.enabled",
     "strategies.purgeErrors.turns",
     "strategies.purgeErrors.protectedTools",
+    // preemptiveCompaction
+    "preemptiveCompaction",
+    "preemptiveCompaction.enabled",
+    "preemptiveCompaction.threshold",
+    "preemptiveCompaction.cooldownMs",
+    "preemptiveCompaction.minTokens",
+    "preemptiveCompaction.truncation",
+    "preemptiveCompaction.truncation.enabled",
+    "preemptiveCompaction.truncation.protectedMessages",
 ])
 
 // Extract all key paths from a config object for validation
@@ -421,6 +444,16 @@ const defaultConfig: PluginConfig = {
             protectedTools: [...DEFAULT_PROTECTED_TOOLS],
         },
     },
+    preemptiveCompaction: {
+        enabled: false, // Opt-in feature
+        threshold: 0.85,
+        cooldownMs: 60000,
+        minTokens: 50000,
+        truncation: {
+            enabled: true,
+            protectedMessages: 3,
+        },
+    },
 }
 
 const GLOBAL_CONFIG_DIR = join(homedir(), ".config", "opencode")
@@ -705,6 +738,16 @@ export function getConfig(ctx: PluginInput): PluginConfig {
                 ],
                 tools: mergeTools(config.tools, result.data.tools as any),
                 strategies: mergeStrategies(config.strategies, result.data.strategies as any),
+                preemptiveCompaction: {
+                    enabled: result.data.preemptiveCompaction?.enabled ?? config.preemptiveCompaction.enabled,
+                    threshold: result.data.preemptiveCompaction?.threshold ?? config.preemptiveCompaction.threshold,
+                    cooldownMs: result.data.preemptiveCompaction?.cooldownMs ?? config.preemptiveCompaction.cooldownMs,
+                    minTokens: result.data.preemptiveCompaction?.minTokens ?? config.preemptiveCompaction.minTokens,
+                    truncation: {
+                        enabled: result.data.preemptiveCompaction?.truncation?.enabled ?? config.preemptiveCompaction.truncation.enabled,
+                        protectedMessages: result.data.preemptiveCompaction?.truncation?.protectedMessages ?? config.preemptiveCompaction.truncation.protectedMessages,
+                    },
+                },
             }
         }
     } else {
@@ -747,6 +790,16 @@ export function getConfig(ctx: PluginInput): PluginConfig {
                 ],
                 tools: mergeTools(config.tools, result.data.tools as any),
                 strategies: mergeStrategies(config.strategies, result.data.strategies as any),
+                preemptiveCompaction: {
+                    enabled: result.data.preemptiveCompaction?.enabled ?? config.preemptiveCompaction.enabled,
+                    threshold: result.data.preemptiveCompaction?.threshold ?? config.preemptiveCompaction.threshold,
+                    cooldownMs: result.data.preemptiveCompaction?.cooldownMs ?? config.preemptiveCompaction.cooldownMs,
+                    minTokens: result.data.preemptiveCompaction?.minTokens ?? config.preemptiveCompaction.minTokens,
+                    truncation: {
+                        enabled: result.data.preemptiveCompaction?.truncation?.enabled ?? config.preemptiveCompaction.truncation.enabled,
+                        protectedMessages: result.data.preemptiveCompaction?.truncation?.protectedMessages ?? config.preemptiveCompaction.truncation.protectedMessages,
+                    },
+                },
             }
         }
     }
@@ -786,6 +839,16 @@ export function getConfig(ctx: PluginInput): PluginConfig {
                 ],
                 tools: mergeTools(config.tools, result.data.tools as any),
                 strategies: mergeStrategies(config.strategies, result.data.strategies as any),
+                preemptiveCompaction: {
+                    enabled: result.data.preemptiveCompaction?.enabled ?? config.preemptiveCompaction.enabled,
+                    threshold: result.data.preemptiveCompaction?.threshold ?? config.preemptiveCompaction.threshold,
+                    cooldownMs: result.data.preemptiveCompaction?.cooldownMs ?? config.preemptiveCompaction.cooldownMs,
+                    minTokens: result.data.preemptiveCompaction?.minTokens ?? config.preemptiveCompaction.minTokens,
+                    truncation: {
+                        enabled: result.data.preemptiveCompaction?.truncation?.enabled ?? config.preemptiveCompaction.truncation.enabled,
+                        protectedMessages: result.data.preemptiveCompaction?.truncation?.protectedMessages ?? config.preemptiveCompaction.truncation.protectedMessages,
+                    },
+                },
             }
         }
     }

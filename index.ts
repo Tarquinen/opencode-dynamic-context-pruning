@@ -4,6 +4,7 @@ import { Logger } from "./lib/logger"
 import { createSessionState } from "./lib/state"
 import { createDiscardTool, createExtractTool } from "./lib/strategies"
 import { createChatMessageTransformHandler, createSystemPromptHandler } from "./lib/hooks"
+import { createPreemptiveCompactionHandler } from "./lib/preemptive"
 
 const plugin: Plugin = (async (ctx) => {
     const config = getConfig(ctx)
@@ -17,7 +18,13 @@ const plugin: Plugin = (async (ctx) => {
 
     logger.info("DCP initialized", {
         strategies: config.strategies,
+        preemptiveCompaction: config.preemptiveCompaction.enabled,
     })
+
+    // Create preemptive compaction handler if enabled
+    const preemptiveHandler = config.preemptiveCompaction.enabled
+        ? createPreemptiveCompactionHandler(ctx.client, ctx.directory, state, logger, config)
+        : null
 
     return {
         "experimental.chat.system.transform": createSystemPromptHandler(state, logger, config),
@@ -81,6 +88,8 @@ const plugin: Plugin = (async (ctx) => {
                 )
             }
         },
+        // Preemptive compaction event hook (handles message.updated events)
+        ...(preemptiveHandler && { event: preemptiveHandler }),
     }
 }) satisfies Plugin
 

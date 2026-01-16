@@ -202,6 +202,56 @@
                     }
                 }
             }
+        },
+        "preemptiveCompaction": {
+            "type": "object",
+            "description": "Preemptive compaction to avoid context overflow. Attempts DCP + truncation before falling back to summarization.",
+            "additionalProperties": false,
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Enable preemptive compaction (opt-in feature)"
+                },
+                "threshold": {
+                    "type": "number",
+                    "minimum": 0.5,
+                    "maximum": 0.95,
+                    "default": 0.85,
+                    "description": "Context usage ratio that triggers compaction (0.85 = 85%)"
+                },
+                "cooldownMs": {
+                    "type": "number",
+                    "minimum": 10000,
+                    "maximum": 300000,
+                    "default": 60000,
+                    "description": "Minimum time between compaction attempts (milliseconds)"
+                },
+                "minTokens": {
+                    "type": "number",
+                    "default": 50000,
+                    "description": "Minimum tokens before compaction can trigger"
+                },
+                "truncation": {
+                    "type": "object",
+                    "description": "Truncation phase configuration",
+                    "additionalProperties": false,
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Enable truncation of large tool outputs"
+                        },
+                        "protectedMessages": {
+                            "type": "number",
+                            "minimum": 1,
+                            "maximum": 10,
+                            "default": 3,
+                            "description": "Number of recent messages to protect from truncation"
+                        }
+                    }
+                }
+            }
         }
     }
 }
