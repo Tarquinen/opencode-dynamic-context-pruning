@@ -43,6 +43,17 @@ DCP uses multiple tools and strategies to reduce context size:
 
 Your session history is never modified—DCP replaces pruned content with placeholders before sending requests to your LLM.
 
+### Preemptive Compaction (Experimental)
+
+**Preemptive Compaction** — An optional multi-phase context reduction system that proactively manages context before it exceeds model limits. When enabled, it monitors token usage after each message and triggers compaction when usage exceeds a configurable threshold (default: 85%).
+
+The compaction flow proceeds in phases:
+1. **DCP Strategies** — Runs all enabled DCP strategies (deduplication, supersede writes, purge errors)
+2. **Tool Truncation** — If still over threshold, truncates large tool outputs (preserving recent messages)
+3. **Summarization** — If still over threshold, triggers OpenCode's built-in summarization
+
+This prevents context overflow errors and maintains session continuity during long conversations. Disabled by default—enable via `preemptiveCompaction.enabled: true`.
+
 ## Impact on Prompt Caching
 
 LLM providers like Anthropic and OpenAI cache prompts based on exact prefix matching. When DCP prunes a tool output, it changes the message content, which invalidates cached prefixes from that point forward.
@@ -119,6 +130,23 @@ DCP uses its own config file:
             "turns": 4,
             // Additional tools to protect from pruning
             "protectedTools": [],
+        },
+    },
+    // Preemptive compaction (experimental) - proactively manages context before limits
+    "preemptiveCompaction": {
+        // Disabled by default - opt-in feature
+        "enabled": false,
+        // Context usage threshold to trigger compaction (0.0 - 1.0)
+        "threshold": 0.85,
+        // Cooldown between compaction attempts (ms)
+        "cooldownMs": 60000,
+        // Minimum tokens before compaction can trigger
+        "minTokens": 50000,
+        // Tool output truncation settings
+        "truncation": {
+            "enabled": true,
+            // Number of recent messages to protect from truncation
+            "protectedMessages": 3,
         },
     },
 }
