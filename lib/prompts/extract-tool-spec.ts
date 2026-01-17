@@ -1,11 +1,11 @@
-Extracts key findings from tool outputs into distilled knowledge, then removes the raw outputs from context.
+export const EXTRACT_TOOL_SPEC = `Extracts key findings from tool outputs into distilled knowledge, then removes the raw outputs from context.
 
 ## IMPORTANT: The Prunable List
-A `<prunable-tools>` list is provided to you showing available tool outputs you can extract from when there are tools available for pruning. Each line has the format `ID: tool, parameter` (e.g., `20: read, /path/to/file.ts`). You MUST only use numeric IDs that appear in this list to select which tools to extract.
+A \`<prunable-tools>\` list is provided to you showing available tool outputs you can extract from when there are tools available for pruning. Each line has the format \`ID: tool, parameter\` (e.g., \`20: read, /path/to/file.ts\`). You MUST only use numeric IDs that appear in this list to select which tools to extract.
 
 ## When to Use This Tool
 
-Use `extract` when you have gathered useful information that you want to **preserve in distilled form** before removing the raw outputs:
+Use \`extract\` when you have gathered useful information that you want to **preserve in distilled form** before removing the raw outputs:
 
 - **Task Completion:** You completed a unit of work and want to preserve key findings.
 - **Knowledge Preservation:** You have context that contains valuable information, but also a lot of unnecessary detail - you only need to preserve some specifics.
@@ -22,8 +22,8 @@ Use `extract` when you have gathered useful information that you want to **prese
 
 ## Format
 
-- `ids`: Array of numeric IDs as strings from the `<prunable-tools>` list
-- `distillation`: Array of strings, one per ID (positional: distillation[0] is for ids[0], etc.)
+- \`ids\`: Array of numeric IDs as strings from the \`<prunable-tools>\` list
+- \`distillation\`: Array of strings, one per ID (positional: distillation[0] is for ids[0], etc.)
 
 Each distillation string should capture the essential information you need to preserve - function signatures, logic, constraints, values, etc. Be as detailed as needed for your task.
 
@@ -44,4 +44,4 @@ I'll preserve the key details before extracting.
 <example_keep>
 Assistant: [Reads 'auth.ts' to understand the login flow]
 I've understood the auth flow. I'll need to modify this file to add the new validation, so I'm keeping this read in context rather than extracting.
-</example_keep>
+</example_keep>`

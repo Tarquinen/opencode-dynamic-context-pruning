@@ -12,7 +12,7 @@ const isGeminiModel = (modelID: string): boolean => {
     return lowerModelID.includes("gemini")
 }
 
-export const createSyntheticAssistantMessageWithToolPart = (
+export const createSyntheticAssistantMessage = (
     baseMessage: WithParts,
     content: string,
     variant?: string,
@@ -39,24 +39,11 @@ export const createSyntheticAssistantMessageWithToolPart = (
         ...(variant !== undefined && { variant }),
     }
 
-    // For Gemini models, inject as text to avoid thought signature requirements
-    // Gemini 3+ has strict validation requiring thoughtSignature on functionCall parts
-    if (isGeminiModel(userInfo.model.modelID)) {
-        return {
-            info: baseInfo,
-            parts: [
-                {
-                    id: SYNTHETIC_PART_ID,
-                    sessionID: userInfo.sessionID,
-                    messageID: SYNTHETIC_MESSAGE_ID,
-                    type: "text",
-                    text: content,
-                },
-            ],
-        }
-    }
+    // For Gemini models, add thoughtSignature bypass to avoid validation errors
+    const toolPartMetadata = isGeminiModel(userInfo.model.modelID)
+        ? { google: { thoughtSignature: "skip_thought_signature_validator" } }
+        : undefined
 
-    // For other models, use tool part for cleaner context
     return {
         info: baseInfo,
         parts: [
@@ -75,6 +62,7 @@ export const createSyntheticAssistantMessageWithToolPart = (
                     metadata: {},
                     time: { start: now, end: now },
                 },
+                ...(toolPartMetadata && { metadata: toolPartMetadata }),
             },
         ],
     }
