@@ -168,11 +168,17 @@ export class Logger {
                                 callID: part.callID,
                             }
 
+                            if (part.state?.status) {
+                                toolPart.status = part.state.status
+                            }
                             if (part.state?.input) {
                                 toolPart.input = part.state.input
                             }
                             if (part.state?.output) {
                                 toolPart.output = part.state.output
+                            }
+                            if (part.state?.error) {
+                                toolPart.error = part.state.error
                             }
 
                             return toolPart

@@ -39,7 +39,9 @@ async function executePruneOperation(
 
     if (!ids || ids.length === 0) {
         logger.debug(`${toolName} tool called but ids is empty or undefined`)
-        return `No IDs provided. Check the <prunable-tools> list for available IDs to ${toolName.toLowerCase()}.`
+        throw new Error(
+            `No IDs provided. Check the <prunable-tools> list for available IDs to ${toolName.toLowerCase()}.`,
+        )
     }
 
     const numericToolIds: number[] = ids
@@ -48,7 +50,7 @@ async function executePruneOperation(
 
     if (numericToolIds.length === 0) {
         logger.debug(`No numeric tool IDs provided for ${toolName}: ` + JSON.stringify(ids))
-        return "No numeric IDs provided. Format: ids: [id1, id2, ...]"
+        throw new Error("No numeric IDs provided. Format: ids: [id1, id2, ...]")
     }
 
     // Fetch messages to calculate tokens and find current agent
@@ -65,7 +67,9 @@ async function executePruneOperation(
     // Validate that all numeric IDs are within bounds
     if (numericToolIds.some((id) => id < 0 || id >= toolIdList.length)) {
         logger.debug("Invalid tool IDs provided: " + numericToolIds.join(", "))
-        return "Invalid IDs provided. Only use numeric IDs from the <prunable-tools> list."
+        throw new Error(
+            "Invalid IDs provided. Only use numeric IDs from the <prunable-tools> list.",
+        )
     }
 
     // Validate that all IDs exist in cache and aren't protected
@@ -78,7 +82,9 @@ async function executePruneOperation(
                 "Rejecting prune request - ID not in cache (turn-protected or hallucinated)",
                 { index, id },
             )
-            return "Invalid IDs provided. Only use numeric IDs from the <prunable-tools> list."
+            throw new Error(
+                "Invalid IDs provided. Only use numeric IDs from the <prunable-tools> list.",
+            )
         }
         const allProtectedTools = config.tools.settings.protectedTools
         if (allProtectedTools.includes(metadata.tool)) {
@@ -87,7 +93,9 @@ async function executePruneOperation(
                 id,
                 tool: metadata.tool,
             })
-            return "Invalid IDs provided. Only use numeric IDs from the <prunable-tools> list."
+            throw new Error(
+                "Invalid IDs provided. Only use numeric IDs from the <prunable-tools> list.",
+            )
         }
 
         const filePath = getFilePathFromParameters(metadata.parameters)
@@ -98,7 +106,9 @@ async function executePruneOperation(
                 tool: metadata.tool,
                 filePath,
             })
-            return "Invalid IDs provided. Only use numeric IDs from the <prunable-tools> list."
+            throw new Error(
+                "Invalid IDs provided. Only use numeric IDs from the <prunable-tools> list.",
+            )
         }
     }
 
@@ -158,7 +168,9 @@ export function createDiscardTool(ctx: PruneToolContext): ReturnType<typeof tool
             const validReasons = ["completion", "noise"] as const
             if (typeof reason !== "string" || !validReasons.includes(reason as any)) {
                 ctx.logger.debug("Invalid discard reason provided: " + reason)
-                return "No valid reason found. Use 'completion' or 'noise' as the first element."
+                throw new Error(
+                    "No valid reason found. Use 'completion' or 'noise' as the first element.",
+                )
             }
 
             const numericIds = args.ids.slice(1)
@@ -186,7 +198,9 @@ export function createExtractTool(ctx: PruneToolContext): ReturnType<typeof tool
                 ctx.logger.debug(
                     "Extract tool called without distillation: " + JSON.stringify(args),
                 )
-                return "Missing distillation. You must provide a distillation string for each ID."
+                throw new Error(
+                    "Missing distillation. You must provide a distillation string for each ID.",
+                )
             }
 
             // Log the distillation for debugging/analysis

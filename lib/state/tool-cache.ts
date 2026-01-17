@@ -42,7 +42,9 @@ export async function syncToolCache(
                     turnProtectionTurns > 0 &&
                     state.currentTurn - turnCounter < turnProtectionTurns
 
-                state.lastToolPrune = part.tool === "discard" || part.tool === "extract"
+                state.lastToolPrune =
+                    (part.tool === "discard" || part.tool === "extract") &&
+                    part.state.status === "completed"
 
                 const allProtectedTools = config.tools.settings.protectedTools
 
