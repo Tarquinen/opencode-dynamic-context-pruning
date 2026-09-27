@@ -289,12 +289,15 @@ export function createCommandExecuteHandler(
     }
 }
 
-export function createTextCompleteHandler() {
+export function createTextCompleteHandler(state: SessionState) {
     return async (
         _input: { sessionID: string; messageID: string; partID: string },
         output: { text: string },
     ) => {
-        output.text = stripHallucinationsFromString(output.text)
+        // The session format decides which tags are recognised: compact sessions
+        // emit @7@ refs, and cleaning with the default XML rules leaves them in
+        // the rendered reply (#632).
+        output.text = stripHallucinationsFromString(output.text, state.idFormat)
     }
 }
 
