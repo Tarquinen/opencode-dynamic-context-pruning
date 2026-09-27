@@ -11,6 +11,15 @@ const DCP_UNPAIRED_TAG_REGEX = /<\/?dcp[^>]*>/gi
 const INJECTED_MESSAGE_ID_SUFFIX_REGEX = /(?<=\n)<dcp-message-id[^>]*>m\d+<\/dcp-message-id>\s*$/
 const HALLUCINATED_PARAMETER_SUFFIX_REGEX = /(?<=\n)m\d+<\/parameter>\s*$/
 const COMPACT_TAG_REGEX = /@(?:[1-9]\d*|b[1-9]\d*|blocked)@(?:[ \t]+\[(?:low|medium|high)\])?/gi
+// Models that imitate the injected tag often emit broken fragments instead of a
+// well formed one: a run of trailing lines made only of bracket debris such as
+// "<<", "<" or "<m0477" (see #562). The run is anchored to the end of the reply
+// and needs at least two lines, so a lone "<" in prose, markdown or code stays
+// intact.
+const DEGENERATE_TAG_LINE_PATTERN = String.raw`[ \t]*<{1,2}\/?[ \t]*(?:dcp[a-z-]*|m\d+|b\d+)?[ \t]*>?[ \t]*`
+const DEGENERATE_TAG_DEBRIS_REGEX = new RegExp(
+    String.raw`(?:\n${DEGENERATE_TAG_LINE_PATTERN}){2,}\n?$`,
+)
 
 const generateStableId = (prefix: string, seed: string): string => {
     const hash = createHash("sha256").update(seed).digest("hex").slice(0, SUMMARY_ID_HASH_LENGTH)
@@ -175,6 +184,7 @@ export const stripHallucinationsFromString = (text: string, format: IdFormat = "
     return withoutKnownSuffixes
         .replace(DCP_PAIRED_TAG_REGEX, "")
         .replace(DCP_UNPAIRED_TAG_REGEX, "")
+        .replace(DEGENERATE_TAG_DEBRIS_REGEX, "")
 }
 
 export const stripHallucinations = (messages: WithParts[], format: IdFormat = "xml"): void => {
