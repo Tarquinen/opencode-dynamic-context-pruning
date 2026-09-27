@@ -1,7 +1,12 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Logger } from "../lib/logger"
-import { assignMessageRefs } from "../lib/message-ids"
+import {
+    assignMessageRefs,
+    formatMessageRef,
+    parseMessageRef,
+    MESSAGE_REF_MAX_INDEX,
+} from "../lib/message-ids"
 import { checkSession, createSessionState, type WithParts } from "../lib/state"
 
 function textPart(messageID: string, sessionID: string, id: string, text: string) {
@@ -86,4 +91,90 @@ test("checkSession resets message id aliases after native compaction", async () 
     assert.equal(state.messageIds.byRef.get("m0001"), "msg-assistant-summary")
     assert.equal(state.messageIds.byRef.get("m0002"), "msg-user-follow-up")
     assert.equal(state.messageIds.nextRef, 3)
+})
+
+function conversation(sessionID: string, count: number): WithParts[] {
+    return Array.from({ length: count }, (_, index) => ({
+        info: {
+            id: `msg_${index + 1}`,
+            role: index % 2 === 0 ? "user" : "assistant",
+            sessionID,
+            agent: "build",
+            model: { providerID: "lab", modelID: "test" },
+            time: { created: index + 1 },
+        },
+        parts: [{ type: "text", text: `body ${index}` }],
+    })) as WithParts[]
+}
+
+test("a conversation longer than 9999 messages still receives aliases", () => {
+    const sessionID = `ses_long_${Date.now()}`
+    const state = createSessionState()
+    const messages = conversation(sessionID, 10028)
+
+    assert.doesNotThrow(() => assignMessageRefs(state, messages))
+
+    assert.equal(state.messageIds.byRawId.size, 10028)
+    assert.equal(state.messageIds.byRawId.get("msg_9999"), "m9999")
+    assert.equal(state.messageIds.byRawId.get("msg_10000"), "m10000")
+    assert.equal(state.messageIds.byRawId.get("msg_10028"), "m10028")
+    assert.equal(state.messageIds.byRef.get("m10028"), "msg_10028")
+})
+
+test("four digit aliases keep their exact rendering, five digits only appear past 9999", () => {
+    // Widening the pool must not rewrite tags that already exist in a live
+    // session, because every rewritten mid-conversation tag breaks the
+    // provider prompt cache.
+    assert.equal(formatMessageRef(1), "m0001")
+    assert.equal(formatMessageRef(9999), "m9999")
+    assert.equal(formatMessageRef(10000), "m10000")
+    assert.equal(formatMessageRef(MESSAGE_REF_MAX_INDEX), "m99999")
+
+    for (const ref of ["m0001", "m9999", "m10000", "m99999"]) {
+        assert.equal(parseMessageRef(ref), Number(ref.slice(1)), ref)
+    }
+    for (const invalid of ["m100000", "m000", "mabc", "1000"]) {
+        assert.equal(parseMessageRef(invalid), null, invalid)
+    }
+})
+
+test("aliases for messages that left the conversation are reclaimed", () => {
+    const sessionID = `ses_reclaim_${Date.now()}`
+    const state = createSessionState()
+    const full = conversation(sessionID, 40)
+    assignMessageRefs(state, full)
+    assert.equal(state.messageIds.byRawId.size, 40)
+
+    // opencode compaction, /fork and /undo all shorten the message list.
+    const shortened = full.slice(20)
+    assignMessageRefs(state, shortened)
+
+    assert.equal(state.messageIds.byRawId.size, 20)
+    assert.equal(state.messageIds.byRef.size, 20)
+    assert.equal(state.messageIds.byRef.get("m0001"), undefined)
+    assert.equal(state.messageIds.byRawId.get("msg_1"), undefined)
+    assert.equal(state.messageIds.byRef.get("m0021"), "msg_21")
+    assert.equal(state.messageIds.byRef.get("m0040"), "msg_40")
+})
+
+test("reclaimed aliases are reused instead of exhausting the pool", () => {
+    const sessionID = `ses_reuse_${Date.now()}`
+    const state = createSessionState()
+    const full = conversation(sessionID, 10028)
+    assignMessageRefs(state, full)
+    assert.equal(state.messageIds.nextRef, 10029)
+
+    // The session keeps living past the point where the pool used to be empty.
+    const live = full.slice(10020)
+    for (let i = 0; i < 40; i++) {
+        const next = [
+            ...live,
+            ...conversation(sessionID, 1).map((m) => ({
+                ...m,
+                info: { ...m.info, id: `msg_new_${i}` },
+            })),
+        ]
+        assert.doesNotThrow(() => assignMessageRefs(state, next))
+    }
+    assert.equal(state.messageIds.byRef.size, state.messageIds.byRawId.size)
 })

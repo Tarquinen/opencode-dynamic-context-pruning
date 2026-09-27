@@ -1,7 +1,7 @@
 import type { SessionState, WithParts } from "./state"
 import { isIgnoredUserMessage } from "./messages/query"
 
-const MESSAGE_REF_REGEX = /^m(\d{4})$/
+const MESSAGE_REF_REGEX = /^m(\d{4,5})$/
 const BLOCK_REF_REGEX = /^b([1-9]\d*)$/
 const COMPACT_MESSAGE_REGEX = /^@([1-9]\d*)@$/
 const COMPACT_BLOCK_REGEX = /^@b([1-9]\d*)@$/
@@ -9,9 +9,11 @@ const MESSAGE_ID_TAG_NAME = "dcp-message-id"
 
 export type IdFormat = "xml" | "compact"
 
-const MESSAGE_REF_WIDTH = 4
+// Aliases render as m0001 and only widen to a fifth digit once the four digit
+// space is exhausted, so existing sessions keep byte-identical tags.
+const MESSAGE_REF_MIN_WIDTH = 4
 const MESSAGE_REF_MIN_INDEX = 1
-export const MESSAGE_REF_MAX_INDEX = 9999
+export const MESSAGE_REF_MAX_INDEX = 99999
 
 export type ParsedBoundaryId =
     | {
@@ -32,7 +34,7 @@ export function formatMessageRef(index: number, format: IdFormat = "xml"): strin
     }
     return format === "compact"
         ? `@${index}@`
-        : `m${index.toString().padStart(MESSAGE_REF_WIDTH, "0")}`
+        : `m${index.toString().padStart(Math.max(MESSAGE_REF_MIN_WIDTH, `${index}`.length), "0")}`
 }
 
 export function formatBlockRef(blockId: number, format: IdFormat = "xml"): string {
@@ -124,9 +126,39 @@ export function formatMessageIdTag(
     return `\n<${MESSAGE_ID_TAG_NAME}${serializedAttributes}>${ref}</${MESSAGE_ID_TAG_NAME}>`
 }
 
+// Aliases are a fixed size resource, but the conversation can shrink: opencode
+// drops old messages on its own compaction, and /fork plus /undo rewrite the
+// message list. Without reclaiming them the pool leaks for the lifetime of a
+// session and can be exhausted even when few messages remain.
+function reclaimStaleMessageRefs(state: SessionState, messages: WithParts[]): void {
+    if (state.messageIds.byRawId.size === 0) {
+        return
+    }
+
+    const liveIds = new Set<string>()
+    for (const message of messages) {
+        const id = message.info?.id
+        if (typeof id === "string" && id.length > 0) {
+            liveIds.add(id)
+        }
+    }
+
+    for (const [rawId, ref] of state.messageIds.byRawId) {
+        if (liveIds.has(rawId)) {
+            continue
+        }
+        if (state.messageIds.byRef.get(ref) === rawId) {
+            state.messageIds.byRef.delete(ref)
+        }
+        state.messageIds.byRawId.delete(rawId)
+    }
+}
+
 export function assignMessageRefs(state: SessionState, messages: WithParts[]): number {
     let assigned = 0
     let skippedSubAgentPrompt = false
+
+    reclaimStaleMessageRefs(state, messages)
 
     for (const message of messages) {
         if (isIgnoredUserMessage(message)) {
@@ -176,6 +208,7 @@ function allocateNextMessageRef(state: SessionState): string {
     }
 
     throw new Error(
-        `Message ID alias capacity exceeded. Cannot allocate more than ${formatMessageRef(max, state.idFormat)} aliases in this session.`,
+        `Message ID alias capacity exceeded. Cannot allocate more than ${formatMessageRef(max, state.idFormat)} aliases in this session. ` +
+            `Start a new session to continue; removing the plugin from opencode.json also unblocks the current one.`,
     )
 }
