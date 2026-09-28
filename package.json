@@ -57,7 +57,8 @@
     "author": "tarquinen",
     "license": "AGPL-3.0-or-later",
     "peerDependencies": {
-        "@opencode-ai/plugin": ">=1.18.29"
+        "@opencode-ai/plugin": ">=1.18.29",
+        "@opencode/plugin": "^2.0.4"
     },
     "dependencies": {
         "@anthropic-ai/tokenizer": "^0.0.4",
@@ -69,7 +70,7 @@
     },
     "devDependencies": {
         "@opencode-ai/plugin": "^1.18.29",
-        "@opencode/plugin": "^2.0.4",
+        "@opencode/plugin": "^2.0.16",
         "@opencode/theme": "^2.0.4",
         "@types/node": "^25.5.0",
         "prettier": "^3.8.1",

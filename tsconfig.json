@@ -21,6 +21,6 @@
         "jsxImportSource": "@opentui/solid",
         "types": ["node"]
     },
-    "include": ["index.ts", "tui.tsx", "lib/**/*"],
+    "include": ["index.ts", "index.v2.ts", "tui.tsx", "lib/**/*"],
     "exclude": ["node_modules", "dist", "logs"]
 }

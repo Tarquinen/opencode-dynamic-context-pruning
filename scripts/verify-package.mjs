@@ -37,6 +37,7 @@ const requiredTarballFiles = [
 const forbiddenTarballPatterns = [
     /^node_modules\//,
     /^index\.ts$/,
+    /^index\.v2\.ts$/,
     /^tests\//,
     /^scripts\//,
     /^docs\//,
