@@ -4,6 +4,7 @@ import type { WithParts } from "../lib/state"
 import {
     COMPACTED_TOOL_OUTPUT_PLACEHOLDER,
     countAllMessageTokens,
+    countTokens,
     countToolTokens,
     estimateTokensBatch,
     extractCompletedToolOutput,
@@ -171,4 +172,26 @@ test("counting uses the compacted tool placeholder for completed outputs", () =>
 
     assert.equal(extractCompletedToolOutput(part), COMPACTED_TOOL_OUTPUT_PLACEHOLDER)
     assertCounted(part, [JSON.stringify(input), COMPACTED_TOOL_OUTPUT_PLACEHOLDER])
+})
+
+test("countTokens matches @anthropic-ai/tokenizer and reuses one tokenizer", async () => {
+    const tokenizer = await import("@anthropic-ai/tokenizer")
+    const reference = (tokenizer.countTokens ??
+        (tokenizer as any).default?.countTokens) as typeof tokenizer.countTokens
+    const samples = [
+        "hello world",
+        "Crème brûlée — ﬁ ligature ① and emoji 🚀",
+        JSON.stringify({ path: "src/index.ts", edits: [{ line: 1, text: "const x = 1" }] }),
+        "x".repeat(10_000),
+        "<|endoftext|> special tokens are counted, not rejected",
+    ]
+    for (const sample of samples) assert.equal(countTokens(sample), reference(sample))
+
+    // Building a tokenizer per call took ~70 ms; 200 calls with a shared one take a few milliseconds.
+    const start = performance.now()
+    for (let index = 0; index < 200; index++) countTokens(`tool output ${index} `.repeat(50))
+    assert.ok(
+        performance.now() - start < 2_000,
+        "countTokens should not rebuild the tokenizer on every call",
+    )
 })

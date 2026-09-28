@@ -2,8 +2,16 @@ import { SessionState, WithParts } from "./state"
 import { AssistantMessage, UserMessage } from "@opencode-ai/sdk/v2"
 import { Logger } from "./logger"
 import * as _anthropicTokenizer from "@anthropic-ai/tokenizer"
-const anthropicCountTokens = (_anthropicTokenizer.countTokens ??
-    (_anthropicTokenizer as any).default?.countTokens) as typeof _anthropicTokenizer.countTokens
+const getAnthropicTokenizer = (_anthropicTokenizer.getTokenizer ??
+    (_anthropicTokenizer as any).default?.getTokenizer) as typeof _anthropicTokenizer.getTokenizer
+// The package's countTokens() builds and frees a new WASM tokenizer on every call (~70 ms each), which
+// blocks the host for seconds when many tool outputs are counted. Build it once and reuse it: the
+// counts are identical (same encoder, same NFKC normalisation and special-token handling).
+let anthropicTokenizer: ReturnType<typeof getAnthropicTokenizer> | undefined
+function anthropicCountTokens(text: string): number {
+    anthropicTokenizer ??= getAnthropicTokenizer()
+    return anthropicTokenizer.encode(text.normalize("NFKC"), "all").length
+}
 import { getLastUserMessage } from "./messages/query"
 
 export function getCurrentTokenUsage(state: SessionState, messages: WithParts[]): number {
