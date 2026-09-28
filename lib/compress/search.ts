@@ -43,6 +43,13 @@ export function buildSearchContext(state: SessionState, rawMessages: WithParts[]
     }
 }
 
+// An ID that parses but is missing from the lookup is almost never a wrong
+// choice by the caller: opencode compaction wipes the alias map, and DCP then
+// renumbers the surviving messages from m0001. Without this the model is told it
+// picked a bad ID, retries with the same stale value and burns a cycle (#551).
+const STALE_BOUNDARY_HINT =
+    " It was probably issued before opencode compacted this conversation, which renumbers IDs. Re-read the IDs currently shown in context; if the range was already compressed, start from the enclosing compressed block ID instead."
+
 export function resolveBoundaryIds(
     context: SearchContext,
     state: SessionState,
@@ -83,13 +90,13 @@ export function resolveBoundaryIds(
 
     if (!startReference) {
         issues.push(
-            `startId ${parsedStartId.ref} is not available in the current conversation context. Choose an injected ID visible in context.`,
+            `startId ${parsedStartId.ref} is not available in the current conversation context. Choose an injected ID visible in context.${STALE_BOUNDARY_HINT}`,
         )
     }
 
     if (!endReference) {
         issues.push(
-            `endId ${parsedEndId.ref} is not available in the current conversation context. Choose an injected ID visible in context.`,
+            `endId ${parsedEndId.ref} is not available in the current conversation context. Choose an injected ID visible in context.${STALE_BOUNDARY_HINT}`,
         )
     }
 

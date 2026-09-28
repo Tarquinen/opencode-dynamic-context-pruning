@@ -80,6 +80,12 @@ export function formatIssues(skippedIssues: string[], skippedCount: number): str
     return `Unable to compress any messages. Found ${skippedCount} ${issueNoun}:\n${issueLines}`
 }
 
+// See STALE_BOUNDARY_HINT in compress/search.ts: a missing alias usually means
+// opencode compacted and the IDs were renumbered, not that the caller guessed
+// wrong (#551).
+const staleIdHint =
+    " It was probably issued before opencode compacted this conversation, which renumbers IDs. Re-read the IDs currently shown in context."
+
 function issueTemplates(format: IdFormat): Record<string, [singular: string, plural: string]> {
     const message = format === "compact" ? "@4@" : "mNNNN"
     const block = format === "compact" ? "@b1@" : "bN"
@@ -97,8 +103,8 @@ function issueTemplates(format: IdFormat): Record<string, [singular: string, plu
             `are invalid here. Block IDs like ${block} are not allowed; use ${message} message IDs instead.`,
         ],
         "not-in-context": [
-            `is not available in the current conversation context. Choose an injected ${message} ID visible in context.`,
-            `are not available in the current conversation context. Choose injected ${message} IDs visible in context.`,
+            `is not available in the current conversation context. Choose an injected ${message} ID visible in context.${staleIdHint}`,
+            `are not available in the current conversation context. Choose injected ${message} IDs visible in context.${staleIdHint}`,
         ],
         protected: [
             "refers to a protected message and cannot be compressed.",

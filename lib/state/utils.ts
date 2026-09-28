@@ -342,4 +342,16 @@ export function resetOnCompaction(state: SessionState): void {
         turnNudgeAnchors: new Set<string>(),
         iterationNudgeAnchors: new Set<string>(),
     }
+    // Everything the old history contributed is gone with it. Leaving the
+    // counters behind made the /dcp context panel claim pruned tokens while
+    // simultaneously reporting zero pruned tools and messages.
+    state.stats = {
+        pruneTokenCounter: 0,
+        totalPruneTokens: 0,
+    }
+    state.systemPromptTokens = undefined
+    state.compressionTiming = {
+        startsByCallId: new Map<string, number>(),
+        pendingByCallId: new Map(),
+    }
 }
