@@ -252,6 +252,15 @@ export async function saveManualModeSetting(
     await writePersistedSessionState(sessionId, state, logger)
 }
 
+export async function deleteSessionState(sessionId: string, logger: Logger): Promise<void> {
+    try {
+        await fs.unlink(getSessionFilePath(sessionId))
+        logger.debug("Removed state file for deleted session", { sessionId })
+    } catch {
+        // The file may never have been written, or may already be gone.
+    }
+}
+
 export interface AggregatedStats {
     totalTokens: number
     totalTools: number
