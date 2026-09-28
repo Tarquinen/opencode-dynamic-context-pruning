@@ -84,13 +84,19 @@ export function getModelInfo(messages: WithParts[]): LastUserModelContext {
     }
 }
 
+interface ResolvedContextLimit {
+    /** The user configured a value, even if it could not be turned into a token count. */
+    configured: boolean
+    tokens: number | undefined
+}
+
 function resolveContextTokenLimit(
     config: PluginConfig,
     state: SessionState,
     providerId: string | undefined,
     modelId: string | undefined,
     threshold: "max" | "min",
-): number | undefined {
+): ResolvedContextLimit {
     const parseLimitValue = (limit: number | `${number}%` | undefined): number | undefined => {
         if (limit === undefined) {
             return undefined
@@ -120,13 +126,13 @@ function resolveContextTokenLimit(
         const providerModelId = `${providerId}/${modelId}`
         const modelLimit = modelLimits[providerModelId]
         if (modelLimit !== undefined) {
-            return parseLimitValue(modelLimit)
+            return { configured: true, tokens: parseLimitValue(modelLimit) }
         }
     }
 
     const globalLimit =
         threshold === "max" ? config.compress.maxContextLimit : config.compress.minContextLimit
-    return parseLimitValue(globalLimit)
+    return { configured: globalLimit !== undefined, tokens: parseLimitValue(globalLimit) }
 }
 
 export function isContextOverLimits(
@@ -147,14 +153,28 @@ export function isContextOverLimits(
         "max",
     )
     const maxContextLimit =
-        resolvedMaxContextLimit === undefined
+        resolvedMaxContextLimit.tokens === undefined
             ? undefined
-            : resolvedMaxContextLimit + summaryTokenExtension
-    const minContextLimit = resolveContextTokenLimit(config, state, providerId, modelId, "min")
+            : resolvedMaxContextLimit.tokens + summaryTokenExtension
+    const resolvedMinContextLimit = resolveContextTokenLimit(
+        config,
+        state,
+        providerId,
+        modelId,
+        "min",
+    )
     const currentTokens = getCurrentTokenUsage(state, messages)
 
     const overMaxLimit = maxContextLimit === undefined ? false : currentTokens > maxContextLimit
-    const overMinLimit = minContextLimit === undefined ? true : currentTokens >= minContextLimit
+
+    // A threshold that was configured but cannot be evaluated yet (a percentage
+    // before the host reports the model context window, or an unparseable value)
+    // must not behave as if no threshold exists. Treating it as "over the lower
+    // limit" started compression far below the value the user asked for (#548).
+    const overMinLimit = resolvedMinContextLimit.configured
+        ? resolvedMinContextLimit.tokens !== undefined &&
+          currentTokens >= resolvedMinContextLimit.tokens
+        : true
 
     return {
         overMaxLimit,
