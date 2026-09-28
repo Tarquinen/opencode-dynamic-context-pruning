@@ -36,7 +36,13 @@ import {
 } from "./commands"
 import { type HostPermissionSnapshot } from "./host-permissions"
 import { compressPermission, syncCompressPermissionState } from "./compress-permission"
-import { checkSession, ensureSessionInitialized, saveSessionState, syncToolCache } from "./state"
+import {
+    checkSession,
+    deleteSessionState,
+    ensureSessionInitialized,
+    saveSessionState,
+    syncToolCache,
+} from "./state"
 import { cacheSystemPromptTokens } from "./ui/utils"
 
 const INTERNAL_AGENT_SIGNATURES = [
@@ -300,6 +306,19 @@ export function createTextCompleteHandler() {
 
 export function createEventHandler(state: SessionState, logger: Logger) {
     return async (input: { event: any }) => {
+        // Deleting a session leaves its persisted prune state behind forever,
+        // and the orphan still counts towards the all-time stats (#557).
+        if (input.event?.type === "session.deleted") {
+            const deletedSessionId = input.event.properties?.info?.id
+            if (typeof deletedSessionId === "string" && deletedSessionId.length > 0) {
+                await deleteSessionState(deletedSessionId, logger)
+                if (state.sessionId === deletedSessionId) {
+                    state.sessionId = null
+                }
+            }
+            return
+        }
+
         const eventTime =
             typeof input.event?.time === "number" && Number.isFinite(input.event.time)
                 ? input.event.time
