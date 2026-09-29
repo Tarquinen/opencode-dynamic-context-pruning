@@ -1,23 +1,21 @@
 import type { SessionState, WithParts } from "../../state"
 import type { PluginConfig } from "../../config"
+import { compressToolName } from "../../config"
 import {
     appendGuidanceToDcpTag,
     buildCompressedBlockGuidance,
+    buildMessageOccupancyGuidance,
     renderMessagePriorityGuidance,
 } from "../../prompts/extensions/nudge"
 import type { RuntimePrompts } from "../../prompts/store"
+import { withCompressToolName } from "../../prompts"
 import type { UserMessage } from "@opencode-ai/sdk/v2"
 import {
     type CompressionPriorityMap,
     type MessagePriority,
     listPriorityRefsBeforeIndex,
 } from "../priority"
-import {
-    appendToTextPart,
-    appendToLastTextPart,
-    createSyntheticTextPart,
-    hasContent,
-} from "../utils"
+import { hasContent, pushSyntheticTextPart } from "../utils"
 import { getLastUserMessage, isIgnoredUserMessage } from "../query"
 import { getCurrentTokenUsage } from "../../token-utils"
 import { getActiveSummaryTokenUsage } from "../../state/utils"
@@ -213,38 +211,15 @@ function injectAnchoredNudge(message: WithParts, nudgeText: string): void {
         return
     }
 
-    if (message.info.role === "user") {
-        if (appendToLastTextPart(message, nudgeText)) {
-            return
-        }
-
-        message.parts.push(createSyntheticTextPart(message, nudgeText))
+    // Keep skipping content-less assistant messages: a leading text part on an
+    // empty assistant message is treated as prefill by providers (issue #463).
+    if (message.info.role === "assistant" && !hasContent(message)) {
         return
     }
 
-    if (message.info.role !== "assistant") {
-        return
-    }
-
-    if (!hasContent(message)) {
-        return
-    }
-
-    for (const part of message.parts) {
-        if (part.type === "text") {
-            if (appendToTextPart(part, nudgeText)) {
-                return
-            }
-        }
-    }
-
-    const syntheticPart = createSyntheticTextPart(message, nudgeText)
-    const firstToolIndex = message.parts.findIndex((p) => p.type === "tool")
-    if (firstToolIndex === -1) {
-        message.parts.push(syntheticPart)
-    } else {
-        message.parts.splice(firstToolIndex, 0, syntheticPart)
-    }
+    // Always a standalone synthetic part: appending into authored text has
+    // leaked persisted nudges into visible chat bubbles.
+    pushSyntheticTextPart(message, nudgeText)
 }
 
 function collectAnchoredMessages(
@@ -329,46 +304,57 @@ export function applyAnchoredNudges(
     compressionPriorities?: CompressionPriorityMap,
 ): void {
     const turnNudgeAnchors = collectTurnNudgeAnchors(state, config, messages)
+    const toolName = compressToolName(config)
+    const nudges = {
+        contextLimitNudge: withCompressToolName(prompts.contextLimitNudge, toolName),
+        turnNudge: withCompressToolName(prompts.turnNudge, toolName),
+        iterationNudge: withCompressToolName(prompts.iterationNudge, toolName),
+    }
 
     if (config.compress.mode === "message") {
         applyMessageModeAnchoredNudge(
             state.nudges.contextLimitAnchors,
             messages,
-            prompts.contextLimitNudge,
+            nudges.contextLimitNudge,
             compressionPriorities,
         )
         applyMessageModeAnchoredNudge(
             turnNudgeAnchors,
             messages,
-            prompts.turnNudge,
+            nudges.turnNudge,
             compressionPriorities,
         )
         applyMessageModeAnchoredNudge(
             state.nudges.iterationNudgeAnchors,
             messages,
-            prompts.iterationNudge,
+            nudges.iterationNudge,
             compressionPriorities,
         )
         return
     }
 
-    const compressedBlockGuidance = buildCompressedBlockGuidance(state)
+    const compressedBlockGuidance = [
+        buildCompressedBlockGuidance(state),
+        buildMessageOccupancyGuidance(state, config, messages),
+    ]
+        .filter((section) => section.length > 0)
+        .join("\n\n")
     applyRangeModeAnchoredNudge(
         state.nudges.contextLimitAnchors,
         messages,
-        prompts.contextLimitNudge,
+        nudges.contextLimitNudge,
         compressedBlockGuidance,
     )
     applyRangeModeAnchoredNudge(
         turnNudgeAnchors,
         messages,
-        prompts.turnNudge,
+        nudges.turnNudge,
         compressedBlockGuidance,
     )
     applyRangeModeAnchoredNudge(
         state.nudges.iterationNudgeAnchors,
         messages,
-        prompts.iterationNudge,
+        nudges.iterationNudge,
         compressedBlockGuidance,
     )
 }

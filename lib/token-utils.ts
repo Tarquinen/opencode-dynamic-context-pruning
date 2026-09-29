@@ -7,6 +7,7 @@ const anthropicCountTokens = (_anthropicTokenizer.countTokens ??
 import { getLastUserMessage } from "./messages/query"
 
 export function getCurrentTokenUsage(state: SessionState, messages: WithParts[]): number {
+    let foundTokens = false
     for (let i = messages.length - 1; i >= 0; i--) {
         const msg = messages[i]
         if (msg.info.role !== "assistant") {
@@ -17,6 +18,7 @@ export function getCurrentTokenUsage(state: SessionState, messages: WithParts[])
         if ((assistantInfo.tokens?.output || 0) <= 0) {
             continue
         }
+        foundTokens = true
 
         if (
             state.lastCompaction > 0 &&
@@ -34,7 +36,26 @@ export function getCurrentTokenUsage(state: SessionState, messages: WithParts[])
         return input + output + reasoning + cacheRead + cacheWrite
     }
 
-    return 0
+    if (foundTokens) {
+        return 0
+    }
+
+    // No assistant message carries token accounting (some v2 storage shapes
+    // omit `tokens`). Without a number the nudge thresholds never trip and
+    // DCP never asks the model to compress — the exact "v2 never compresses"
+    // symptom. Fall back to a content-based estimate; it is a lower bound,
+    // which is the safe direction for deciding to nudge.
+    const lastMessage = messages[messages.length - 1]
+    const key = `${messages.length}:${lastMessage?.info.id ?? ""}`
+    if (state.tokenUsageEstimate?.key === key) {
+        return state.tokenUsageEstimate.value
+    }
+    let estimate = 0
+    for (const msg of messages) {
+        estimate += countAllMessageTokens(msg)
+    }
+    state.tokenUsageEstimate = { key, value: estimate }
+    return estimate
 }
 
 export function getCurrentParams(

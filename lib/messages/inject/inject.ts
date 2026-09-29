@@ -13,10 +13,10 @@ import {
 } from "../query"
 import { saveSessionState } from "../../state/persistence"
 import {
-    appendToTextPart,
     appendToLastTextPart,
     appendToAllToolParts,
     createSyntheticTextPart,
+    pushSyntheticTextPart,
     hasContent,
 } from "../utils"
 import {
@@ -180,18 +180,7 @@ export const injectMessageIds = (
         )
 
         if (message.info.role === "user") {
-            let injected = false
-            for (const part of message.parts) {
-                if (part.type === "text") {
-                    injected = appendToTextPart(part, tag) || injected
-                }
-            }
-
-            if (injected) {
-                continue
-            }
-
-            message.parts.push(createSyntheticTextPart(message, tag))
+            pushSyntheticTextPart(message, tag)
             continue
         }
 

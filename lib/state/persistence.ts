@@ -6,11 +6,15 @@
 
 import * as fs from "fs/promises"
 import { existsSync } from "fs"
+import { randomBytes } from "crypto"
 import { homedir } from "os"
 import { join } from "path"
 import type { CompressionBlock, PrunedMessageEntry, SessionState, SessionStats } from "./types"
 import type { Logger } from "../logger"
 import { serializePruneMessagesState } from "./utils"
+
+/** Monotonic counter making each atomic-write temp path unique within a process. */
+let tmpSequence = 0
 
 /** Prune state as stored on disk */
 export interface PersistedPruneMessagesState {
@@ -69,7 +73,15 @@ async function writePersistedSessionState(
 
     const filePath = getSessionFilePath(sessionId)
     const content = JSON.stringify(state, null, 2)
-    await fs.writeFile(filePath, content, "utf-8")
+    // Write via temp file + rename so a kill/restart mid-write can never leave
+    // a truncated JSON file behind (a truncated file would fail to load on the
+    // next start and previously lost every compression block).
+    // The suffix must be unique per call: saves for the same session can run
+    // concurrently (fire-and-forget inject saves vs awaited tool saves), and a
+    // shared name lets two writers interleave (write/write/rename/ENOENT).
+    const tmpPath = `${filePath}.${process.pid}.${tmpSequence++}.${randomBytes(4).toString("hex")}.tmp`
+    await fs.writeFile(tmpPath, content, "utf-8")
+    await fs.rename(tmpPath, filePath)
 
     logger.info("Saved session state to disk", {
         sessionId,
@@ -84,6 +96,17 @@ export async function saveSessionState(
 ): Promise<void> {
     try {
         if (!sessionState.sessionId) {
+            return
+        }
+
+        // The on-disk state exists but is unreadable for this session. Refuse
+        // to write: otherwise the first write-through after a failed load
+        // would replace the only copy of the compression blocks with a
+        // near-empty state, silently destroying them.
+        if (sessionState.persistedLoadFailed) {
+            logger.warn("Refusing to overwrite unreadable state file", {
+                sessionId: sessionState.sessionId,
+            })
             return
         }
 
@@ -110,6 +133,10 @@ export async function saveSessionState(
             error: error?.message,
         })
     }
+}
+
+export function sessionStateFileExists(sessionId: string): boolean {
+    return existsSync(getSessionFilePath(sessionId))
 }
 
 export async function loadSessionState(
@@ -246,6 +273,15 @@ export async function saveManualModeSetting(
     logger: Logger,
 ): Promise<void> {
     const existing = await loadSessionState(sessionId, logger)
+    // Same guard as saveSessionState: a null load with the file present means
+    // the on-disk state is unreadable. Falling back to a fresh state here
+    // would destroy the compression blocks with a manual-mode-only stub.
+    if (!existing && sessionStateFileExists(sessionId)) {
+        logger.warn("Refusing to overwrite unreadable state file", {
+            sessionId,
+        })
+        return
+    }
     const state = existing ?? emptyPersistedState(manualMode)
     state.manualMode = manualMode
     state.lastUpdated = new Date().toISOString()

@@ -142,6 +142,19 @@ export function formatStatsHeader(totalTokensSaved: number, pruneTokenCounter: n
     return [`▣ DCP | ${totalTokensSavedStr} saved total`].join("\n")
 }
 
+/**
+ * Every DCP chat notification carries this marker. The V2 request view uses it
+ * to keep UI notifications out of the model's context, since the V2 host never
+ * strips `ignored` parts. Only the marker prefix matches: manual-trigger
+ * prompts start with their own marker (<compress triggered manually>) and must
+ * stay visible to the model.
+ */
+export const DCP_CHAT_MARKER = "▣ DCP"
+
+export function isDcpChatText(text: string | undefined | null): boolean {
+    return !!text && text.startsWith(DCP_CHAT_MARKER)
+}
+
 export function formatTokenCount(tokens: number, compact?: boolean): string {
     const suffix = compact ? "" : " tokens"
     if (tokens >= 1000) {

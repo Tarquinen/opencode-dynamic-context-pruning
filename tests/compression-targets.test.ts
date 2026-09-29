@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import "./lab/persistence-env"
 import test from "node:test"
 import { getActiveCompressionTargets } from "../lib/commands/compression-targets"
 import { createSessionState, type CompressionBlock } from "../lib/state"

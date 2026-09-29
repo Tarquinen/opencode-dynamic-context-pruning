@@ -1,21 +1,12 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { join } from "node:path"
-import { tmpdir } from "node:os"
-import { mkdirSync } from "node:fs"
+import "./lab/persistence-env"
 import { createCompressRangeTool } from "../lib/compress/range"
 import { createSessionState, type WithParts } from "../lib/state"
 import type { PluginConfig } from "../lib/config"
 import { Logger } from "../lib/logger"
 
-const testDataHome = join(tmpdir(), `opencode-dcp-tests-${process.pid}`)
-const testConfigHome = join(tmpdir(), `opencode-dcp-config-tests-${process.pid}`)
-
-process.env.XDG_DATA_HOME = testDataHome
-process.env.XDG_CONFIG_HOME = testConfigHome
-
-mkdirSync(testDataHome, { recursive: true })
-mkdirSync(testConfigHome, { recursive: true })
+// XDG sandbox lives in ./lab/persistence-env (must be imported before lib).
 
 function buildConfig(): PluginConfig {
     return {

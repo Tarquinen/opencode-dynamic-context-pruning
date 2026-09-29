@@ -3,6 +3,8 @@ import type { ToolContext } from "./types"
 import { countTokens } from "../token-utils"
 import { rangeFormat } from "../prompts/extensions/tool"
 import { formatMessageRef, formatBlockRef, type IdFormat } from "../message-ids"
+import { withCompressToolName } from "../prompts"
+import { compressToolName } from "../config"
 import { finalizeSession, prepareSession, type NotificationEntry } from "./pipeline"
 import {
     appendProtectedPromptInfo,
@@ -61,7 +63,10 @@ export function createCompressRangeTool(ctx: ToolContext): ReturnType<typeof too
     const runtimePrompts = ctx.prompts.getRuntimePrompts()
 
     return tool({
-        description: runtimePrompts.compressRange + rangeFormat(ctx.state.idFormat),
+        description: withCompressToolName(
+            runtimePrompts.compressRange,
+            compressToolName(ctx.config),
+        ) + rangeFormat(ctx.state.idFormat),
         args: buildSchema(ctx.state.idFormat),
         async execute(args, toolCtx) {
             const input = args as CompressRangeToolArgs

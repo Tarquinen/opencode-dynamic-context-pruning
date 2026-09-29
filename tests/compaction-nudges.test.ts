@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import "./lab/persistence-env"
 import test from "node:test"
 import type { PluginConfig } from "../lib/config"
 import { Logger } from "../lib/logger"

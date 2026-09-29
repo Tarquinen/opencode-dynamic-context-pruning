@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import "./lab/persistence-env"
 import test from "node:test"
 import type { PluginConfig } from "../lib/config"
 import { isContextOverLimits } from "../lib/messages/inject/utils"
@@ -208,6 +209,48 @@ test("getCurrentTokenUsage returns 0 until a fresh assistant follows compaction"
     state.lastCompaction = 2
 
     assert.equal(getCurrentTokenUsage(state, messages), 0)
+})
+
+test("getCurrentTokenUsage falls back to a content estimate when no assistant reports tokens", () => {
+    // v2 storage shapes can omit per-assistant token accounting entirely.
+    // Without the fallback the nudge thresholds never trip and DCP never
+    // compresses (the "v2 never compresses" symptom).
+    const state = createSessionState()
+    const pad = "filler content worth many tokens. ".repeat(50)
+    const messages: WithParts[] = [
+        {
+            info: {
+                id: "msg-1",
+                role: "user",
+                sessionID: "ses_fallback",
+                time: { created: 1 },
+            } as WithParts["info"],
+            parts: [
+                { id: "p1", type: "text", text: "hello", messageID: "msg-1", sessionID: "ses_fallback" },
+            ],
+        },
+        {
+            info: {
+                id: "msg-2",
+                role: "assistant",
+                sessionID: "ses_fallback",
+                time: { created: 2 },
+                // No `tokens` field at all — the failing host shape.
+            } as WithParts["info"],
+            parts: [
+                { id: "p2", type: "text", text: pad, messageID: "msg-2", sessionID: "ses_fallback" },
+            ],
+        },
+    ]
+
+    const usage = getCurrentTokenUsage(state, messages)
+    assert.ok(usage > 0, "fallback must produce a positive estimate")
+    // Memoized per message tail: same input, same estimate without recount.
+    assert.equal(getCurrentTokenUsage(state, messages), usage)
+    // A host that does report tokens must still take priority.
+    const reported = structuredClone(messages)
+    ;(reported[1].info as any).tokens = { output: 42, input: 7 }
+    assert.equal(getCurrentTokenUsage(state, reported), 49)
 })
 
 test("isContextOverLimits ignores stale summary totals and resumes with fresh reported totals", () => {

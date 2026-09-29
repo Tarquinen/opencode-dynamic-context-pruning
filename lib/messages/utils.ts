@@ -55,7 +55,10 @@ export const createSyntheticTextPart = (
     stableSeed?: string,
 ) => {
     const userInfo = baseMessage.info as UserMessage
-    const deterministicSeed = stableSeed?.trim() || userInfo.id
+    // Seed includes the content so re-injecting the same decoration on a later
+    // request yields the same part id; pushSyntheticTextPart uses that to dedupe
+    // against parts the host may have persisted.
+    const deterministicSeed = stableSeed?.trim() || `${userInfo.id}:${content}`
     const partId = generateStableId("prt_dcp_text", deterministicSeed)
 
     return {
@@ -64,6 +67,42 @@ export const createSyntheticTextPart = (
         messageID: userInfo.id,
         type: "text" as const,
         text: content,
+        // Model-visible (hosts keep synthetic parts in model messages) but
+        // hidden by TUIs, and safe if a host persists it: it never renders
+        // inside the user's own message bubble.
+        synthetic: true,
+    }
+}
+
+/**
+ * Appends DCP decoration as its own synthetic text part instead of mutating
+ * the user's authored text. Hosts have been observed persisting
+ * request-time mutations, which surfaced DCP nudges and ID tags inside the
+ * user's chat bubble; a synthetic part stays invisible there.
+ */
+export const pushSyntheticTextPart = (message: WithParts, content: string): void => {
+    if (!content.trim()) {
+        return
+    }
+
+    const part = createSyntheticTextPart(message, content)
+    const existing = message.parts.find(
+        (candidate) =>
+            candidate.id === part.id ||
+            (candidate.type === "text" &&
+                typeof candidate.text === "string" &&
+                candidate.text.includes(content)),
+    )
+    if (!existing) {
+        message.parts.push(part)
+        return
+    }
+
+    // A host may persist DCP parts and the strip step empties them before
+    // re-injection; refill so the decoration never silently disappears from
+    // the model context.
+    if (existing.type === "text" && !existing.text.includes(content)) {
+        existing.text = content
     }
 }
 

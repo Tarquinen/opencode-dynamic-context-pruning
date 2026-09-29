@@ -98,14 +98,29 @@ export class Logger {
         return this.write("DEBUG", component, message, data)
     }
 
+    // Warnings and errors are always echoed to the host console — the file
+    // sink is debug-gated, and gating these hid every persistence and
+    // permission failure during the v2 rollout.
+    private echo(level: "WARN" | "ERROR", component: string, message: string, data?: any) {
+        const dataStr = this.formatData(data)
+        const line = `[dcp] ${level} ${component}: ${message}${dataStr ? " | " + dataStr : ""}`
+        if (level === "ERROR") {
+            console.error(line)
+        } else {
+            console.warn(line)
+        }
+    }
+
     warn(message: string, data?: any) {
         const component = this.getCallerFile(2)
-        return this.write("WARN", component, message, data)
+        this.echo("WARN", component, message, data)
+        if (this.enabled) return this.write("WARN", component, message, data)
     }
 
     error(message: string, data?: any) {
         const component = this.getCallerFile(2)
-        return this.write("ERROR", component, message, data)
+        this.echo("ERROR", component, message, data)
+        if (this.enabled) return this.write("ERROR", component, message, data)
     }
 
     /**

@@ -1,6 +1,6 @@
 import type { SessionState, WithParts } from "./state"
 import type { Logger } from "./logger"
-import type { PluginConfig } from "./config"
+import { compressToolName, type PluginConfig } from "./config"
 import { assignMessageRefs } from "./message-ids"
 import {
     buildPriorityMap,
@@ -15,6 +15,7 @@ import {
     syncCompressionBlocks,
 } from "./messages"
 import { renderSystemPrompt, type PromptStore } from "./prompts"
+import { isCompressToolPart } from "./messages/query"
 import { buildProtectedToolsExtension } from "./prompts/extensions/system"
 import {
     applyPendingCompressionDurations,
@@ -95,6 +96,7 @@ export function createSystemPromptHandler(
             buildProtectedToolsExtension(config.compress.protectedTools),
             !!state.manualMode,
             state.isSubAgent && config.experimental.allowSubAgents,
+            compressToolName(config),
         )
         if (output.system.length > 0) {
             output.system[output.system.length - 1] += "\n\n" + newPrompt
@@ -313,7 +315,7 @@ export function createEventHandler(state: SessionState, logger: Logger) {
         }
 
         const part = input.event.properties?.part
-        if (part?.type !== "tool" || part.tool !== "compress") {
+        if (!isCompressToolPart(part)) {
             return
         }
 

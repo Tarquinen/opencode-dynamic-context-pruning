@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises"
+import "./lab/persistence-env"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import test from "node:test"

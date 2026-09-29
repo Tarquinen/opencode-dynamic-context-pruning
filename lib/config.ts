@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from "fs"
 import { join, dirname } from "path"
 import { homedir } from "os"
-import { parse } from "jsonc-parser/lib/esm/main.js"
+import { parse } from "jsonc-parser"
 import type { PluginInput } from "@opencode-ai/plugin"
 
 type ConfigContext = Pick<PluginInput, "directory"> & {
@@ -22,9 +22,25 @@ export interface Deduplication {
     protectedTools: string[]
 }
 
+import { DEFAULT_COMPRESS_TOOL_NAME } from "./tool-name"
+
+export const compressToolName = (config: PluginConfig): string =>
+    config.compress.toolName ?? DEFAULT_COMPRESS_TOOL_NAME
+
 export interface CompressConfig {
     mode: CompressMode
     permission: Permission
+    /**
+     * Model-facing name under which DCP registers its compress tool.
+     *
+     * Defaults to "dcp_compress" (see compressToolName) so the tool cannot be
+     * shadowed by another tool named "compress" injected between the host and
+     * the model. The sleev gateway injects its own `compress` tool into every
+     * completion request and synthesizes the tool result itself, which
+     * silently replaced DCP's registration on the wire. Permission rules keep
+     * using the "compress" action label regardless of this name.
+     */
+    toolName?: string
     showCompression: boolean
     summaryBuffer: boolean
     maxContextLimit: number | `${number}%`
@@ -124,6 +140,7 @@ export const VALID_CONFIG_KEYS = new Set([
     "compress",
     "compress.mode",
     "compress.permission",
+    "compress.toolName",
     "compress.showCompression",
     "compress.summaryBuffer",
     "compress.maxContextLimit",
@@ -533,6 +550,18 @@ export function validateConfigTypes(config: Record<string, any>): ValidationErro
             }
 
             if (
+                compress.toolName !== undefined &&
+                (typeof compress.toolName !== "string" ||
+                    !/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(compress.toolName))
+            ) {
+                errors.push({
+                    key: "compress.toolName",
+                    expected: "tool-name identifier (letter first, then letters/digits/-/_)",
+                    actual: JSON.stringify(compress.toolName),
+                })
+            }
+
+            if (
                 compress.showCompression !== undefined &&
                 typeof compress.showCompression !== "boolean"
             ) {
@@ -668,7 +697,7 @@ const defaultConfig: PluginConfig = {
     autoUpdate: true,
     debug: false,
     pruneNotification: "detailed",
-    pruneNotificationType: "chat",
+    pruneNotificationType: "toast",
     commands: {
         enabled: true,
         protectedTools: [...DEFAULT_PROTECTED_TOOLS],
@@ -689,6 +718,7 @@ const defaultConfig: PluginConfig = {
     compress: {
         mode: "range",
         permission: "allow",
+        toolName: "dcp_compress",
         showCompression: false,
         summaryBuffer: true,
         maxContextLimit: 100000,
@@ -853,6 +883,7 @@ function mergeCompress(
     return {
         mode: override.mode ?? base.mode,
         permission: override.permission ?? base.permission,
+        toolName: override.toolName ?? base.toolName,
         showCompression: override.showCompression ?? base.showCompression,
         summaryBuffer: override.summaryBuffer ?? base.summaryBuffer,
         maxContextLimit: override.maxContextLimit ?? base.maxContextLimit,

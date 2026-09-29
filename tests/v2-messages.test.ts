@@ -1,6 +1,8 @@
 import assert from "node:assert/strict"
+import "./lab/persistence-env"
 import test from "node:test"
 import type { Message } from "@opencode/ai/schema/messages"
+import { Media } from "@opencode/ai/media"
 import { project } from "../lib/v2/messages"
 import { createSessionState, type CompressionBlock } from "../lib/state"
 import { assignMessageRefs } from "../lib/message-ids"
@@ -27,7 +29,7 @@ function transcript(): Message[] {
             id: "msg_user",
             role: "user",
             content: [
-                { type: "media", mediaType: "image/png", data: new Uint8Array([0, 255]) },
+                { type: "media", media: Media.bytes(new Uint8Array([0, 255]), "image/png") },
                 { type: "text", text: "Inspect this", cache: { type: "ephemeral" } },
             ],
         },
@@ -96,6 +98,69 @@ function entries(messages: Message[]) {
 test("V2 projection preserves all native content without edits", () => {
     const messages = transcript()
     assert.deepEqual(project(messages, entries(messages), session).restore(), messages)
+})
+
+test("V2 request view drops DCP chat notifications but keeps look-alike assistant text", () => {
+    const native: Message[] = [
+        {
+            id: "msg_user",
+            role: "user",
+            content: [{ type: "text", text: "Real user prompt" }],
+        },
+        {
+            id: "msg_dcp_note",
+            role: "user",
+            content: [{ type: "text", text: "▣ DCP | ~1.2K saved total" }],
+        },
+        {
+            id: "msg_trigger",
+            role: "user",
+            content: [
+                { type: "text", text: "<compress triggered manually>\n\nManual trigger prompt" },
+            ],
+        },
+        {
+            id: "msg_assistant",
+            role: "assistant",
+            content: [{ type: "text", text: "The report starts with ▣ DCP | in the log" }],
+        },
+    ]
+    const restored = project(native, entries(native), session).restore()
+    // Manual-trigger prompts reach the model; only stamped DCP notes are dropped.
+    assert.deepEqual(restored.map((message) => message.id), [
+        "msg_user",
+        "msg_trigger",
+        "msg_assistant",
+    ])
+})
+
+test("V2 history view skips DCP chat notifications entirely", async () => {
+    const { history } = await import("../lib/v2/messages")
+    const entries = [
+        {
+            id: "msg_user",
+            type: "user",
+            time: { created: 1 },
+            text: "Real user prompt",
+        },
+        {
+            id: "msg_note",
+            type: "user",
+            time: { created: 2 },
+            text: "▣ DCP\nSweep report body",
+        },
+        {
+            id: "msg_trigger",
+            type: "user",
+            time: { created: 3 },
+            text: "<compress triggered manually>\n\nManual trigger prompt",
+        },
+    ] as unknown as Parameters<typeof history>[0]
+    const views = history(entries, session as Parameters<typeof history>[1])
+    assert.deepEqual(
+        views.map((view) => view.info.id),
+        ["msg_user", "msg_trigger"],
+    )
 })
 
 test("V2 ID injection preserves signatures, media and tool pairing", () => {

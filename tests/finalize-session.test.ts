@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import "./lab/persistence-env"
 import { finalizeSession } from "../lib/compress/pipeline"
 import type { PluginConfig } from "../lib/config"
 import { Logger } from "../lib/logger"

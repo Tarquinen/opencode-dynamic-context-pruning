@@ -1,6 +1,7 @@
 import type { Message, ContentPart, ToolResultPart } from "@opencode/ai/schema/messages"
 import type { Plugin } from "@opencode/plugin"
 import type { WithParts } from "../state"
+import { isDcpChatText } from "../ui/utils"
 
 type History = Awaited<ReturnType<Plugin.Context["session"]["context"]>>
 type Session = Awaited<ReturnType<Plugin.Context["session"]["get"]>>
@@ -55,13 +56,17 @@ export function history(entries: History, session: Session): WithParts[] {
             ]
         }
         let text: string | undefined
-        if (entry.type === "user")
+        if (entry.type === "user") {
+            // DCP chat notifications are UI-only; they never reach the state
+            // view that decides compression.
+            if (isDcpChatText(entry.text)) return []
             text = [
                 ...(entry.skills ?? []).flatMap((skill) =>
                     skill.text === undefined ? [] : [skill.text],
                 ),
                 entry.text,
             ].join("\n\n")
+        }
         if (entry.type === "synthetic" || entry.type === "skill") text = entry.text
         if (entry.type === "location-switched")
             text = `The working directory has been changed to ${entry.location.directory}.`
@@ -110,16 +115,33 @@ export function project(native: Message[], entries: History, session: Session) {
             parts.push({ ...base, id: `${message.id}:step`, type: "step-start" })
         for (const [index, part] of message.content.entries()) {
             let projected: Part | undefined
-            if (part.type === "text")
-                projected = { ...base, id: `${message.id}:${index}`, type: "text", text: part.text }
-            if (part.type === "media")
+            if (part.type === "text") {
+                // DCP chat notifications (and any host-marked ignored text)
+                // are projected but flagged, so restore() can drop them from
+                // the request. They must stay linked, otherwise restore() would
+                // pass the native part through verbatim.
+                const dropped =
+                    message.role === "user" &&
+                    (isDcpChatText(part.text) ||
+                      (part as { ignored?: boolean }).ignored === true)
+                projected = {
+                    ...base,
+                    id: `${message.id}:${index}`,
+                    type: "text",
+                    text: part.text,
+                    ...(dropped ? { ignored: true } : {}),
+                }
+            }
+            if (part.type === "media") {
+                const inline = part.media.inline()
                 projected = {
                     ...base,
                     id: `${message.id}:${index}`,
                     type: "file",
-                    mime: part.mediaType,
-                    url: typeof part.data === "string" ? part.data : "",
+                    mime: part.media.mediaType,
+                    url: inline?.dataUrl ?? "",
                 }
+            }
             if (part.type === "tool-call") {
                 const result = results.get(part.id)
                 const entry = byID.get(message.id)
@@ -210,9 +232,10 @@ export function project(native: Message[], entries: History, session: Session) {
                 )
                     continue
                 const edit = links.get(part)
-                if (part.type === "text" && edit?.type === "text")
+                if (part.type === "text" && edit?.type === "text") {
+                    if (edit.ignored) continue
                     content.push({ ...part, text: edit.text })
-                else if (part.type === "tool-call" && edit?.type === "tool")
+                } else if (part.type === "tool-call" && edit?.type === "tool")
                     content.push({ ...part, input: edit.state.input })
                 else if (
                     part.type === "tool-result" &&

@@ -1,5 +1,5 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { getConfig } from "./lib/config"
+import { compressToolName, getConfig } from "./lib/config"
 import { createCompressMessageTool, createCompressRangeTool } from "./lib/compress"
 import {
     compressDisabledByOpencode,
@@ -81,7 +81,7 @@ const server: Plugin = (async (ctx) => {
         event: createEventHandler(state, logger),
         tool: {
             ...(config.compress.permission !== "deny" && {
-                compress:
+                [compressToolName(config)]:
                     config.compress.mode === "message"
                         ? createCompressMessageTool(compressToolContext)
                         : createCompressRangeTool(compressToolContext),
@@ -105,7 +105,7 @@ const server: Plugin = (async (ctx) => {
 
             const toolsToAdd: string[] = []
             if (config.compress.permission !== "deny" && !config.experimental.allowSubAgents) {
-                toolsToAdd.push("compress")
+                toolsToAdd.push(compressToolName(config))
             }
 
             if (toolsToAdd.length > 0) {
@@ -116,11 +116,11 @@ const server: Plugin = (async (ctx) => {
                 }
             }
 
-            if (!hasExplicitToolPermission(opencodeConfig.permission, "compress")) {
+            if (!hasExplicitToolPermission(opencodeConfig.permission, compressToolName(config))) {
                 const permission = opencodeConfig.permission ?? {}
                 opencodeConfig.permission = {
                     ...permission,
-                    compress: config.compress.permission,
+                    [compressToolName(config)]: config.compress.permission,
                 } as typeof permission
             }
 

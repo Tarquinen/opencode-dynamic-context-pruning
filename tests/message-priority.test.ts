@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import "./lab/persistence-env"
 import test from "node:test"
 import type { PluginConfig } from "../lib/config"
 import { createTextCompleteHandler } from "../lib/hooks"
@@ -196,7 +197,7 @@ test("injectMessageIds injects ID into every tool output for assistant messages"
 
     injectMessageIds(state, config, messages, compressionPriorities)
 
-    assert.equal(messages[0]?.parts.length, 2)
+    assert.equal(messages[0]?.parts.length, 3)
     assert.equal(messages[1]?.parts.length, 4)
 
     const userTextOne = messages[0]?.parts[0]
@@ -212,15 +213,14 @@ test("injectMessageIds injects ID into every tool output for assistant messages"
     assert.equal(assistantToolOne?.type, "tool")
     assert.equal(assistantTextTwo?.type, "text")
     assert.equal(assistantToolTwo?.type, "tool")
-    // User messages: still injected into all text parts
-    assert.match(
-        (userTextOne as any).text,
-        /\n\n<dcp-message-id priority="high">m0001<\/dcp-message-id>/,
-    )
-    assert.match(
-        (userTextTwo as any).text,
-        /\n\n<dcp-message-id priority="high">m0001<\/dcp-message-id>/,
-    )
+    // User tag rides in its own synthetic part; authored text parts stay untouched
+    assert.doesNotMatch((userTextOne as any).text, /dcp-message-id/)
+    assert.doesNotMatch((userTextTwo as any).text, /dcp-message-id/)
+    const userTagPart = messages[0]?.parts[2] as any
+    assert.equal(userTagPart?.type, "text")
+    assert.equal(userTagPart?.synthetic, true)
+    assert.match(userTagPart?.text, /m0001/)
+    assert.match(userTagPart?.text, /dcp-message-id/)
     // Assistant messages: ID injected into every tool output
     assert.doesNotMatch((assistantTextOne as any).text, /dcp-message-id/)
     assert.match((assistantToolOne as any).state.output, /m0002<\/dcp-message-id>/)
@@ -267,14 +267,18 @@ test("injectMessageIds marks every protected user text part as BLOCKED in messag
     const userTextOne = messages[0]?.parts[0]
     const userTextTwo = messages[0]?.parts[1]
     const assistantText = messages[1]?.parts[0]
+    const blockedTagPart = messages[0]?.parts[2] as any
 
+    assert.equal(messages[0]?.parts.length, 3)
     assert.equal(userTextOne?.type, "text")
     assert.equal(userTextTwo?.type, "text")
     assert.equal(assistantText?.type, "text")
-    assert.match((userTextOne as any).text, /\n\n<dcp-message-id>BLOCKED<\/dcp-message-id>/)
-    assert.match((userTextTwo as any).text, /\n\n<dcp-message-id>BLOCKED<\/dcp-message-id>/)
-    assert.doesNotMatch((userTextOne as any).text, /priority=/)
-    assert.doesNotMatch((userTextTwo as any).text, /priority=/)
+    assert.equal(blockedTagPart?.synthetic, true)
+    assert.doesNotMatch((userTextOne as any).text, /dcp-message-id/)
+    assert.doesNotMatch((userTextTwo as any).text, /dcp-message-id/)
+    assert.match(blockedTagPart?.text, /BLOCKED/)
+    assert.match(blockedTagPart?.text, /dcp-message-id/)
+    assert.doesNotMatch(blockedTagPart?.text, /priority=/)
     assert.match(
         (assistantText as any).text,
         /\n\n<dcp-message-id priority="low">m0002<\/dcp-message-id>/,
@@ -407,16 +411,20 @@ test("message-mode nudges append to existing text parts and list only earlier vi
         compressionPriorities,
     )
 
-    assert.equal(messages[2]?.parts.length, 1)
+    assert.equal(messages[2]?.parts.length, 2)
 
-    const injectedNudge = messages[2]?.parts[0]
+    const authoredText = messages[2]?.parts[0] as any
+    assert.doesNotMatch(authoredText?.text, /Base context nudge/)
+
+    const injectedNudge = messages[2]?.parts[1] as any
     assert.equal(injectedNudge?.type, "text")
-    assert.match((injectedNudge as any).text, /\n\n<dcp-system-reminder>Base context nudge/)
-    assert.match((injectedNudge as any).text, /Message priority context:/)
-    assert.match((injectedNudge as any).text, /High-priority message IDs before this point: m0001/)
-    assert.doesNotMatch((injectedNudge as any).text, /m0002/)
-    assert.doesNotMatch((injectedNudge as any).text, /m0003/)
-    assert.doesNotMatch((injectedNudge as any).text, /m0004/)
+    assert.equal(injectedNudge?.synthetic, true)
+    assert.match(injectedNudge?.text, /Base context nudge/)
+    assert.match(injectedNudge?.text, /Message priority context:/)
+    assert.match(injectedNudge?.text, /High-priority message IDs before this point: m0001/)
+    assert.doesNotMatch(injectedNudge?.text, /m0002/)
+    assert.doesNotMatch(injectedNudge?.text, /m0003/)
+    assert.doesNotMatch(injectedNudge?.text, /m0004/)
 })
 
 test("message-mode nudges exclude protected user messages from priority guidance", () => {
@@ -450,13 +458,14 @@ test("message-mode nudges exclude protected user messages from priority guidance
         compressionPriorities,
     )
 
-    const injectedNudge = messages[2]?.parts[0]
+    const injectedNudge = (messages[2]?.parts as any[]).at(-1)
     assert.equal(injectedNudge?.type, "text")
-    assert.match((injectedNudge as any).text, /High-priority message IDs before this point: m0002/)
-    assert.doesNotMatch((injectedNudge as any).text, /m0001/)
+    assert.equal(injectedNudge?.synthetic, true)
+    assert.match(injectedNudge?.text, /High-priority message IDs before this point: m0002/)
+    assert.doesNotMatch(injectedNudge?.text, /m0001/)
 })
 
-test("range-mode nudges append to existing text parts before tool outputs", () => {
+test("range-mode nudges ride in a synthetic part without touching tool outputs", () => {
     const sessionID = "ses_range_nudge_injection"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, repeatedWord("alpha", 6000), 1),
@@ -478,6 +487,29 @@ test("range-mode nudges append to existing text parts before tool outputs", () =
     const config = buildConfig("range")
 
     assignMessageRefs(state, messages)
+    state.prune.messages.blocksById.set(7, {
+        blockId: 7,
+        runId: 1,
+        active: true,
+        deactivatedByUser: false,
+        compressedTokens: 0,
+        summaryTokens: 0,
+        mode: "range",
+        topic: "Earlier notes",
+        startId: "m0001",
+        endId: "m0001",
+        anchorMessageId: "msg-assistant-1",
+        compressMessageId: "msg-origin",
+        includedBlockIds: [],
+        consumedBlockIds: [],
+        parentBlockIds: [],
+        directMessageIds: ["msg-assistant-1"],
+        directToolIds: [],
+        effectiveMessageIds: ["msg-assistant-1"],
+        effectiveToolIds: [],
+        createdAt: 1,
+        summary: "Earlier summary",
+    })
     state.prune.messages.activeBlockIds.add(7)
     state.nudges.contextLimitAnchors.add("msg-assistant-1")
 
@@ -490,16 +522,19 @@ test("range-mode nudges append to existing text parts before tool outputs", () =
         iterationNudge: "<dcp-system-reminder>Base iteration nudge</dcp-system-reminder>",
     })
 
-    assert.equal(messages[1]?.parts.length, 2)
+    assert.equal(messages[1]?.parts.length, 3)
 
-    const injectedNudge = messages[1]?.parts[0]
-    const toolOutput = messages[1]?.parts[1]
+    const injectedNudge = messages[1]?.parts[2] as any
+    const toolOutput = messages[1]?.parts[1] as any
+    const assistantText = messages[1]?.parts[0] as any
+    assert.equal(assistantText?.text, "Working summary.")
     assert.equal(injectedNudge?.type, "text")
+    assert.equal(injectedNudge?.synthetic, true)
     assert.equal(toolOutput?.type, "tool")
-    assert.match((injectedNudge as any).text, /\n\n<dcp-system-reminder>Base context nudge/)
-    assert.match((injectedNudge as any).text, /Compressed block context:/)
-    assert.match((injectedNudge as any).text, /Active compressed blocks in this session: 1 \(b7\)/)
-    assert.equal((toolOutput as any).state.output, "task output body")
+    assert.match(injectedNudge?.text, /Base context nudge/)
+    assert.match(injectedNudge?.text, /Compressed block context:/)
+    assert.match(injectedNudge?.text, /Active compressed blocks in this session: 1 \(b7\)/)
+    assert.equal(toolOutput?.state.output, "task output body")
 })
 
 test("range-mode nudges inject only once for assistant messages with multiple text parts", () => {
@@ -535,8 +570,14 @@ test("range-mode nudges inject only once for assistant messages with multiple te
         iterationNudge: "<dcp-system-reminder>Base iteration nudge</dcp-system-reminder>",
     })
 
-    assert.match((messages[1]?.parts[0] as any).text, /Base context nudge/)
-    assert.doesNotMatch((messages[1]?.parts[1] as any).text, /Base context nudge/)
+    const nudgeParts = (messages[1]?.parts as any[]).filter(
+        (part) => part?.type === "text" && part.synthetic && /Base context nudge/.test(part.text),
+    )
+    assert.equal(nudgeParts.length, 1)
+    for (const part of messages[1]?.parts as any[]) {
+        if (part?.synthetic) continue
+        assert.doesNotMatch(part?.text, /Base context nudge/)
+    }
 })
 
 test("range-mode nudges skip empty assistant messages to avoid prefill (issue #463)", () => {

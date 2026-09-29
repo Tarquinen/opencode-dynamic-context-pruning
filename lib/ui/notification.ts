@@ -8,6 +8,7 @@ import {
 } from "./utils"
 import { ToolParameterEntry } from "../state"
 import { PluginConfig } from "../config"
+import { DCP_CHAT_MARKER, isDcpChatText } from "./utils"
 import { getActiveSummaryTokenUsage } from "../state/utils"
 
 export type PruneReason = "completion" | "noise" | "extraction"
@@ -321,6 +322,9 @@ export async function sendIgnoredMessage(
                   modelID: params.modelId,
               }
             : undefined
+    // Branded so the V2 request view can recognize and drop DCP chat
+    // notifications; see isDcpChatText.
+    const stamped = isDcpChatText(text) ? text : `${DCP_CHAT_MARKER}\n${text}`
 
     try {
         await client.session.prompt({
@@ -335,8 +339,11 @@ export async function sendIgnoredMessage(
                 parts: [
                     {
                         type: "text",
-                        text: text,
+                        text: stamped,
                         ignored: true,
+                        // Host TUIs hide synthetic text parts; `ignored` alone
+                        // still renders them as visible user bubbles.
+                        synthetic: true,
                     },
                 ],
             },

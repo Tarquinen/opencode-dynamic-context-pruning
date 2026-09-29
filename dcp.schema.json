@@ -35,8 +35,8 @@
         "pruneNotificationType": {
             "type": "string",
             "enum": ["chat", "toast"],
-            "default": "chat",
-            "description": "Where to display notifications (chat message or toast notification)"
+            "default": "toast",
+            "description": "Where to display notifications (transient toast, or chat message; chat messages are stored in session history)"
         },
         "commands": {
             "type": "object",

@@ -12,14 +12,31 @@ function sortBlocksByCreation(
     return a.blockId - b.blockId
 }
 
+/**
+ * Recompute block liveness against the current message window.
+ *
+ * Returns true when any block's liveness changed, so callers can persist the
+ * new state to disk immediately (write-through) instead of relying on the
+ * next incidental save.
+ *
+ * A block stays active unless the user deactivated it or a newer block
+ * consumed it. A block whose origin message (compressMessageId) or anchor is
+ * missing from the current window REMAINS ACTIVE: request windows roll, so a
+ * missing origin only means "not visible right now". Range filtering is keyed
+ * by raw message ids (filterCompressedRanges), so an out-of-window block is a
+ * harmless no-op that becomes live again when its range re-enters the window
+ * (e.g. after a restart restores the full history). Deactivating on a missing
+ * origin used to permanently kill compression whenever the origin scrolled out
+ * of a truncated window, and the deactivation was then persisted to disk.
+ */
 export const syncCompressionBlocks = (
     state: SessionState,
     logger: Logger,
     messages: WithParts[],
-): void => {
+): boolean => {
     const messagesState = state.prune.messages
     if (!messagesState?.blocksById?.size) {
-        return
+        return false
     }
 
     const messageIds = new Set(messages.map((msg) => msg.info.id))
@@ -33,23 +50,9 @@ export const syncCompressionBlocks = (
     messagesState.activeByAnchorMessageId.clear()
 
     const now = Date.now()
-    const missingOriginBlockIds: number[] = []
     const orderedBlocks = Array.from(messagesState.blocksById.values()).sort(sortBlocksByCreation)
 
     for (const block of orderedBlocks) {
-        const hasOriginMessage =
-            typeof block.compressMessageId === "string" &&
-            block.compressMessageId.length > 0 &&
-            messageIds.has(block.compressMessageId)
-
-        if (!hasOriginMessage) {
-            block.active = false
-            block.deactivatedAt = now
-            block.deactivatedByBlockId = undefined
-            missingOriginBlockIds.push(block.blockId)
-            continue
-        }
-
         if (block.deactivatedByUser) {
             block.active = false
             if (block.deactivatedAt === undefined) {
@@ -114,11 +117,12 @@ export const syncCompressionBlocks = (
         }
     }
 
-    if (missingOriginBlockIds.length > 0 || deactivatedCount > 0 || reactivatedCount > 0) {
+    if (deactivatedCount > 0 || reactivatedCount > 0) {
         logger.info("Synced compress block state", {
-            missingOriginCount: missingOriginBlockIds.length,
             deactivatedCount,
             reactivatedCount,
         })
     }
+
+    return deactivatedCount > 0 || reactivatedCount > 0
 }

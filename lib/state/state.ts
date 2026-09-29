@@ -1,7 +1,7 @@
 import type { SessionState, ToolParameterEntry, WithParts } from "./types"
 import type { Logger } from "../logger"
 import { applyPendingCompressionDurations } from "../compress/timing"
-import { loadManualModeSetting, loadSessionState, saveSessionState } from "./persistence"
+import { loadManualModeSetting, loadSessionState, saveSessionState, sessionStateFileExists } from "./persistence"
 import {
     isSubAgentSession,
     findLastCompactionTimestamp,
@@ -135,6 +135,8 @@ export function resetSessionState(state: SessionState): void {
     state.currentTurn = 0
     state.modelContextLimit = undefined
     state.systemPromptTokens = undefined
+    state.persistedLoadFailed = undefined
+    state.tokenUsageEstimate = undefined
 }
 
 export async function ensureSessionInitialized(
@@ -166,6 +168,16 @@ export async function ensureSessionInitialized(
 
     const persisted = await loadSessionState(sessionId, logger)
     if (persisted === null) {
+        if (sessionStateFileExists(sessionId)) {
+            // The file is there but unreadable (corrupt JSON or a foreign
+            // format). Mark the state so saveSessionState refuses to write —
+            // otherwise the next write-through would destroy the surviving
+            // compression blocks with a fresh near-empty file.
+            state.persistedLoadFailed = true
+            logger.warn("State file exists but could not be loaded; writes are blocked", {
+                sessionId,
+            })
+        }
         return
     }
 

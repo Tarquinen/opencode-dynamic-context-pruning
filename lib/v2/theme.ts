@@ -1,67 +1,108 @@
 import type { Theme } from "../tui/types"
 
-type Color = Theme["text"]
-type Feedback = "success" | "warning" | "error"
-type Action = "primary" | "secondary"
+/**
+ * Defensive bridge between the host TUI theme and the plugin's ViewApi.
+ *
+ * OpenCode 2.0.10 reshaped the resolved theme (`@opencode/theme`): the old
+ * `theme.contextual.overlay` surface became `theme.surface("dialog")` and the
+ * token paths were renamed — `text.default` → `text.base`, `text.subdued` →
+ * `text.muted`, `background.default` → `background.base`,
+ * `background.surface.offset` → `background.raised.base`, and the action /
+ * feedback state keys `default` → `base`. Older hosts still expose the 2.0.4
+ * shape, and a future host may reshape it again or hand us nothing at all.
+ *
+ * This layer is cosmetic: every access is defensive and a missing theme or
+ * nested field degrades to `undefined` (which @opentui color props treat as
+ * "unset"). It must never throw — a styling gap may not crash the host TUI.
+ */
 
-type CurrentTheme = {
-    surface(name: "dialog"): {
-        text: {
-            base: Color
-            muted: Color
-            action: Record<Action, { base: Color }>
-            feedback: Record<Feedback, { base: Color }>
-        }
-        background: { base: Color; raised: { base: Color } }
-        border: { base: Color }
+function pickPath(root: unknown, path: string): unknown {
+    let node: unknown = root
+    for (const key of path.split(".")) {
+        if (!node || typeof node !== "object") return undefined
+        node = (node as Record<string, unknown>)[key]
     }
+    return node
 }
 
-type EarlierTheme = {
-    contextual: {
-        overlay: {
-            text: {
-                default: Color
-                subdued: Color
-                action: Record<Action, { default: Color }>
-                feedback: Record<Feedback, { default: Color }>
-            }
-            background: { default: Color; surface: { offset: Color } }
-            border: { default: Color }
-        }
+function firstDefined(root: unknown, ...paths: string[]): Theme[keyof Theme] {
+    for (const path of paths) {
+        const value = pickPath(root, path)
+        if (value !== undefined && value !== null) return value as Theme[keyof Theme]
     }
+    return undefined
 }
 
-export function panelTheme(source: CurrentTheme | EarlierTheme): Theme {
-    if ("surface" in source) {
-        const theme = source.surface("dialog")
-        return {
-            primary: theme.text.action.primary.base,
-            accent: theme.text.action.secondary.base,
-            text: theme.text.base,
-            textMuted: theme.text.muted,
-            background: theme.background.base,
-            backgroundElement: theme.background.raised.base,
-            borderSubtle: theme.border.base,
-            selectedListItemText: theme.background.base,
-            success: theme.text.feedback.success.base,
-            warning: theme.text.feedback.warning.base,
-            error: theme.text.feedback.error.base,
+/**
+ * Picks the surface the dialogs render on: the host's dialog surface when the
+ * host exposes `surface(name)` (2.0.10+), the legacy `contextual.overlay`
+ * when present (2.0.4-era), else the base theme itself.
+ */
+export function resolveSurface(theme: unknown): unknown {
+    if (!theme || typeof theme !== "object") return undefined
+    const surface = pickPath(theme, "surface")
+    if (typeof surface === "function") {
+        try {
+            const dialog = (surface as (name: string) => unknown)("dialog")
+            if (dialog && typeof dialog === "object") return dialog
+        } catch {
+            // Host drift or a throwing resolver — fall back to the base theme.
         }
     }
+    const overlay = pickPath(theme, "contextual.overlay")
+    if (overlay && typeof overlay === "object") return overlay
+    return theme
+}
 
-    const theme = source.contextual.overlay
+/**
+ * Builds the ViewApi theme from a live host-theme accessor. `current` stays a
+ * getter so a host that swaps or mutates the theme keeps flowing through.
+ */
+export function resolveViewTheme(getTheme: () => unknown): { readonly current: Theme } {
     return {
-        primary: theme.text.action.primary.default,
-        accent: theme.text.action.secondary.default,
-        text: theme.text.default,
-        textMuted: theme.text.subdued,
-        background: theme.background.default,
-        backgroundElement: theme.background.surface.offset,
-        borderSubtle: theme.border.default,
-        selectedListItemText: theme.background.default,
-        success: theme.text.feedback.success.default,
-        warning: theme.text.feedback.warning.default,
-        error: theme.text.feedback.error.default,
+        get current() {
+            const surface = resolveSurface(getTheme())
+            return {
+                primary: firstDefined(
+                    surface,
+                    "text.action.primary.base",
+                    "text.action.primary.default",
+                ),
+                accent: firstDefined(
+                    surface,
+                    "text.action.secondary.base",
+                    "text.action.secondary.default",
+                ),
+                text: firstDefined(surface, "text.base", "text.default"),
+                textMuted: firstDefined(surface, "text.muted", "text.subdued"),
+                background: firstDefined(surface, "background.base", "background.default"),
+                backgroundElement: firstDefined(
+                    surface,
+                    "background.raised.base",
+                    "background.surface.offset",
+                ),
+                borderSubtle: firstDefined(surface, "border.base", "border.default"),
+                selectedListItemText: firstDefined(
+                    surface,
+                    "background.base",
+                    "background.default",
+                ),
+                success: firstDefined(
+                    surface,
+                    "text.feedback.success.base",
+                    "text.feedback.success.default",
+                ),
+                warning: firstDefined(
+                    surface,
+                    "text.feedback.warning.base",
+                    "text.feedback.warning.default",
+                ),
+                error: firstDefined(
+                    surface,
+                    "text.feedback.error.base",
+                    "text.feedback.error.default",
+                ),
+            }
+        },
     }
 }

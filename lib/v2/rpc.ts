@@ -44,5 +44,16 @@ export const rpc = {
         },
         manual: { input: session.extend({ enabled: z.boolean() }), output: z.object({}) },
     },
-    events: {},
+    // Server -> TUI notifications (prune/compress reports, command output).
+    // Ephemeral by design: nothing is stored, nothing enters model context.
+    events: {
+        notify: {
+            schema: z.object({
+                title: z.string(),
+                message: z.string(),
+                variant: z.enum(["info", "success", "warning", "error"]).optional(),
+                duration: z.number().optional(),
+            }),
+        },
+    },
 } as const

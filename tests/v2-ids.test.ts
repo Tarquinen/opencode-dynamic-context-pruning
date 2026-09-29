@@ -131,7 +131,9 @@ test("V2 cleans echoed IDs and priorities before injecting correct protected/mes
     settings.compress.protectUserMessages = true
     assignMessageRefs(state, raw)
     injectMessageIds(state, settings, raw, buildPriorityMap(settings, state, raw))
-    assert.match((raw[0]!.parts[0] as any).text, /@blocked@$/)
+    const userTagPart = (raw[0]!.parts as any[]).at(-1)!
+    assert.equal(userTagPart.synthetic, true)
+    assert.equal(userTagPart.text, "\n@blocked@")
     assert.match((raw[1]!.parts[1] as any).state.output, /@2@ \[low\]$/)
     assert.doesNotMatch(JSON.stringify(raw), /dcp-message-id/)
     assert.equal(

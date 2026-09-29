@@ -3,6 +3,8 @@ import type { ToolContext } from "./types"
 import { countTokens } from "../token-utils"
 import { messageFormat } from "../prompts/extensions/tool"
 import { formatMessageRef, type IdFormat } from "../message-ids"
+import { withCompressToolName } from "../prompts"
+import { compressToolName } from "../config"
 import { formatIssues, formatResult, resolveMessages, validateArgs } from "./message-utils"
 import { finalizeSession, prepareSession, type NotificationEntry } from "./pipeline"
 import { appendProtectedPromptInfo, appendProtectedTools } from "./protected-content"
@@ -46,7 +48,10 @@ export function createCompressMessageTool(ctx: ToolContext): ReturnType<typeof t
     const runtimePrompts = ctx.prompts.getRuntimePrompts()
 
     return tool({
-        description: runtimePrompts.compressMessage + messageFormat(ctx.state.idFormat),
+        description: withCompressToolName(
+            runtimePrompts.compressMessage,
+            compressToolName(ctx.config),
+        ) + messageFormat(ctx.state.idFormat),
         args: buildSchema(ctx.state.idFormat),
         async execute(args, toolCtx) {
             const input = args as CompressMessageToolArgs
