@@ -84,9 +84,11 @@ export function analyzeContextTokens(state: SessionState, messages: WithParts[])
         total: 0,
     }
 
+    // Messages that opencode already compacted are no longer part of what the
+    // model sees, so they must not seed the system prompt estimate or the total.
     let firstAssistant: AssistantMessage | undefined
     for (const msg of messages) {
-        if (msg.info.role === "assistant") {
+        if (msg.info.role === "assistant" && !isMessageCompacted(state, msg)) {
             const assistantInfo = msg.info as AssistantMessage
             if (
                 assistantInfo.tokens?.input > 0 ||
@@ -102,7 +104,7 @@ export function analyzeContextTokens(state: SessionState, messages: WithParts[])
     let lastAssistant: AssistantMessage | undefined
     for (let i = messages.length - 1; i >= 0; i--) {
         const msg = messages[i]
-        if (msg.info.role === "assistant") {
+        if (msg.info.role === "assistant" && !isMessageCompacted(state, msg)) {
             const assistantInfo = msg.info as AssistantMessage
             if (assistantInfo.tokens?.output > 0) {
                 lastAssistant = assistantInfo
