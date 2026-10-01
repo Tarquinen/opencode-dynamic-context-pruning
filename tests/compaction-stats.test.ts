@@ -89,10 +89,7 @@ test("context breakdown ignores messages that opencode already compacted", () =>
         breakdown.system <= 12_000,
         `system prompt was inflated to ${breakdown.system} by a compacted message`,
     )
-    assert.doesNotMatch(
-        String(breakdown.user),
-        /NaN/,
-    )
+    assert.doesNotMatch(String(breakdown.user), /NaN/)
     assert.ok(breakdown.assistant >= 0, "residual went negative")
 })
 
