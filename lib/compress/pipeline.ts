@@ -87,6 +87,7 @@ export async function finalizeSession(
 ): Promise<void> {
     if (ctx.state.manualMode === "compress-pending") {
         ctx.state.manualMode = false
+        ctx.state.consumedManualTrigger = null
         await refreshManualMode(
             ctx.state,
             toolCtx.sessionID,
