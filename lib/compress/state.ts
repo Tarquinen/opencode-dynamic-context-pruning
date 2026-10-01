@@ -63,6 +63,58 @@ export function wrapCompressedSummary(
     return `${header}\n${body}\n\n${footer}`
 }
 
+// What a range costs the context today: the raw messages it spans plus the
+// summaries of the compressed blocks it will absorb. Without counting the blocks
+// a repeated "b10..m0190" style range looks almost free, which is how a summary
+// can end up larger than the content it replaced (#573).
+export function selectionTokenCost(
+    selection: Pick<SelectionResolution, "messageTokenById" | "requiredBlockIds">,
+    messagesState: PruneMessagesState,
+): number {
+    let total = 0
+
+    for (const tokens of selection.messageTokenById.values()) {
+        total += tokens
+    }
+
+    for (const blockId of selection.requiredBlockIds) {
+        const block = messagesState.blocksById.get(blockId)
+        if (block) {
+            total += block.summaryTokens || 0
+        }
+    }
+
+    return total
+}
+
+// Below this the guard stays out of the way: compressing a handful of short
+// messages into a slightly longer summary is a normal, deliberate choice, and
+// tokenizer noise on very small texts would make the comparison unreliable. The
+// runaway growth this guards against is orders of magnitude larger - the
+// smallest pathological block in #573 was already ~1.6k tokens and grew from
+// there to ~68k.
+const MIN_GUARDED_INPUT_TOKENS = 2000
+
+// A compression that does not shrink the context is pure loss: the original
+// content is destroyed and the summary generation was still paid for. Refusing
+// it leaves the caller free to pick a wider range instead of looping.
+export function assertCompressionShrinksContext(
+    summaryTokens: number,
+    inputTokens: number,
+    boundaryLabel: string,
+    idFormat: IdFormat = "xml",
+): void {
+    if (inputTokens < MIN_GUARDED_INPUT_TOKENS || summaryTokens < inputTokens) {
+        return
+    }
+
+    const id = idFormat === "compact" ? `@${boundaryLabel}@` : boundaryLabel
+    throw new Error(
+        `Refusing to compress ${id}: the summary is ~${summaryTokens} tokens but the content it would replace is only ~${inputTokens} tokens. ` +
+            `A compression has to shrink the context. Choose a wider range, or leave this content uncompressed.`,
+    )
+}
+
 export function applyCompressionState(
     state: SessionState,
     input: CompressionStateInput,
