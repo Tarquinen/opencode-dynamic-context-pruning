@@ -14,6 +14,17 @@ USER INTENT FIDELITY
 When the compressed range includes user messages, preserve the user's intent with extra care. Do not change scope, constraints, priorities, acceptance criteria, or requested outcomes.
 Directly quote user messages when they are short enough to include safely. Direct quotes are preferred when they best preserve exact meaning.
 
+TEMPORAL STATUS OF USER MESSAGES
+A compressed range is HISTORY, not the current instruction. A summary sits behind a [Compressed conversation section] header, and anything inside it has already happened.
+
+Approvals, permissions and confirmations are the failure mode here. Text like "go ahead and do it", "yes, do that", "start writing the spec", or a positive answer to a question tool must be recorded as a past event with its position in the timeline, never as a live instruction. Otherwise a later turn can read the summary, see an approval, and act on it - including a PLAN-mode agent starting to modify files after the user has since told it to stop.
+
+- Write it as past tense with its position: "At that point the user approved writing the spec (third turn of this range). The user has not restated this approval since."
+- Never place an approval at the end of the summary, where it reads as the most recent thing the user said.
+- Never end a summary with an imperative sentence taken from a user message.
+- If the range contains both an approval and a later instruction that narrows, overrides or cancels it, state both and make the later one the operative one.
+- If the range ends with a question or an unresolved decision, say that it is unresolved.
+
 Yet be LEAN. Strip away the noise: failed attempts that led nowhere, verbose tool outputs, back-and-forth exploration. What remains should be pure signal - golden nuggets of detail that preserve full understanding with zero ambiguity.
 
 COMPRESSED BLOCK PLACEHOLDERS
