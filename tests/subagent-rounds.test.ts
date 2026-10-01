@@ -62,7 +62,15 @@ function subAgentSession(subAgentSessionId: string, replies: string[]): WithPart
             model: { providerID: "lab", modelID: "test" },
             time: { created: index + 1 },
         },
-        parts: [{ id: `sub_prt_${index + 1}`, messageID: `sub_msg_${index + 1}`, sessionID: subAgentSessionId, type: "text", text: reply }],
+        parts: [
+            {
+                id: `sub_prt_${index + 1}`,
+                messageID: `sub_msg_${index + 1}`,
+                sessionID: subAgentSessionId,
+                type: "text",
+                text: reply,
+            },
+        ],
     })) as WithParts[]
 }
 
@@ -70,7 +78,10 @@ function clientFor(subAgentSessionId: string, replies: string[]) {
     return {
         session: {
             messages: async ({ path }: { path: { id: string } }) => ({
-                data: path.id === subAgentSessionId ? subAgentSessionId && subAgentSession(subAgentSessionId, replies) : [],
+                data:
+                    path.id === subAgentSessionId
+                        ? subAgentSessionId && subAgentSession(subAgentSessionId, replies)
+                        : [],
             }),
             get: async () => ({ data: { parentID: null } }),
         },
@@ -101,10 +112,11 @@ test("resuming a subagent does not rewrite the results of earlier rounds", async
 
     await injectExtendedSubAgentResults(client as any, state, logger, messages, true)
 
-    assert.deepEqual(
-        recordedBodies(messages),
-        ["ROUND-1 answer A", "ROUND-2 answer B", "ROUND-3 answer C"],
-    )
+    assert.deepEqual(recordedBodies(messages), [
+        "ROUND-1 answer A",
+        "ROUND-2 answer B",
+        "ROUND-3 answer C",
+    ])
 })
 
 test("the result stays pinned after the session cache is dropped", async () => {
@@ -165,7 +177,10 @@ test("separate subagent sessions do not interfere with each other", async () => 
     const client = {
         session: {
             messages: async ({ path }: { path: { id: string } }) => ({
-                data: path.id === "ses_sub_a" ? subAgentSession("ses_sub_a", ["A1", "A2"]) : subAgentSession("ses_sub_b", ["B1"]),
+                data:
+                    path.id === "ses_sub_a"
+                        ? subAgentSession("ses_sub_a", ["A1", "A2"])
+                        : subAgentSession("ses_sub_b", ["B1"]),
             }),
             get: async () => ({ data: { parentID: null } }),
         },
@@ -185,7 +200,13 @@ test("allowSubAgents off leaves every result untouched", async () => {
     const state = createSessionState()
     state.sessionId = parent
 
-    await injectExtendedSubAgentResults(clientFor("ses_sub_x", ["hijacked"]) as any, state, logger, messages, false)
+    await injectExtendedSubAgentResults(
+        clientFor("ses_sub_x", ["hijacked"]) as any,
+        state,
+        logger,
+        messages,
+        false,
+    )
 
     assert.deepEqual(recordedBodies(messages), ["original"])
 })
