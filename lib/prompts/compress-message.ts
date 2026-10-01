@@ -12,6 +12,14 @@ USER INTENT FIDELITY
 When a selected message contains user intent, preserve that intent with extra care. Do not change scope, constraints, priorities, acceptance criteria, or requested outcomes.
 Directly quote short user instructions when that best preserves exact meaning.
 
+TEMPORAL STATUS OF USER MESSAGES
+A summary is HISTORY, not the current instruction.
+
+Approvals, permissions and confirmations are the failure mode here. Text like "go ahead and do it", "yes, do that", or a positive answer to a question tool must be recorded as a past event, never as a live instruction. Otherwise a later turn reads the summary, sees an approval and acts on it - including a PLAN-mode agent starting to modify files after the user has since told it to stop.
+
+- Write it as past tense: "the user approved writing the spec at that point", not "the user approved writing the spec".
+- If a later message in the same batch narrows, overrides or cancels it, make the later one operative and say so.
+
 Yet be LEAN. Strip away the noise: failed attempts that led nowhere, verbose tool output, and repetition. What remains should be pure signal - golden nuggets of detail that preserve full understanding with zero ambiguity.
 If a message contains no significant technical decisions, code changes, or user requirements, produce a minimal one-line summary rather than a detailed one.
 
