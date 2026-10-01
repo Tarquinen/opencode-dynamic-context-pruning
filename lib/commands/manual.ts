@@ -97,6 +97,7 @@ export function applyPendingManualTrigger(
 ): void {
     const pending = state.pendingManualTrigger
     if (!pending) {
+        releaseStaleManualTrigger(state, messages, logger)
         return
     }
 
@@ -118,10 +119,46 @@ export function applyPendingManualTrigger(
 
             part.text = pending.prompt
             state.pendingManualTrigger = null
+            state.consumedManualTrigger = {
+                messageId: msg.info.id,
+                restoreTo: pending.restoreTo,
+            }
             logger.debug("Applied manual prompt", { sessionId: pending.sessionId })
             return
         }
     }
 
     state.pendingManualTrigger = null
+}
+
+// A manual trigger only authorises the compress call that follows it. If the
+// model answers without calling compress, the session must go back to whatever
+// manual mode it was in, otherwise compress-pending sticks and the automatic
+// nudges stay switched off for the rest of the session.
+function releaseStaleManualTrigger(
+    state: SessionState,
+    messages: WithParts[],
+    logger: Logger,
+): void {
+    const consumed = state.consumedManualTrigger
+    if (!consumed || state.manualMode !== "compress-pending") {
+        return
+    }
+
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i]
+        if (msg.info.role !== "user" || isIgnoredUserMessage(msg)) {
+            continue
+        }
+        if (msg.info.id === consumed.messageId) {
+            return
+        }
+        break
+    }
+
+    state.manualMode = consumed.restoreTo
+    state.consumedManualTrigger = null
+    logger.debug("Released manual trigger that produced no compress", {
+        restored: consumed.restoreTo,
+    })
 }

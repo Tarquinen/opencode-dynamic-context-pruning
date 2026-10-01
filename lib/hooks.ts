@@ -247,10 +247,13 @@ export function createCommandExecuteHandler(
                     throw new Error("__DCP_MANUAL_TRIGGER_BLOCKED__")
                 }
 
+                const restoreTo = state.manualMode === "active" ? "active" : false
                 state.manualMode = "compress-pending"
+                state.consumedManualTrigger = null
                 state.pendingManualTrigger = {
                     sessionId: input.sessionID,
                     prompt,
+                    restoreTo,
                 }
                 const rawArgs = (input.arguments || "").trim()
                 output.parts.length = 0

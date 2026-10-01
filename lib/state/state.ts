@@ -1,4 +1,4 @@
-import type { SessionState, ToolParameterEntry, WithParts } from "./types"
+﻿import type { SessionState, ToolParameterEntry, WithParts } from "./types"
 import type { Logger } from "../logger"
 import { applyPendingCompressionDurations } from "../compress/timing"
 import { loadManualModeSetting, loadSessionState, saveSessionState } from "./persistence"
@@ -72,6 +72,7 @@ export function createSessionState(idFormat: IdFormat = "xml"): SessionState {
         manualMode: false,
         compressPermission: undefined,
         pendingManualTrigger: null,
+        consumedManualTrigger: null,
         prune: {
             tools: new Map<string, number>(),
             messages: createPruneMessagesState(),
@@ -110,6 +111,7 @@ export function resetSessionState(state: SessionState): void {
     state.manualMode = false
     state.compressPermission = undefined
     state.pendingManualTrigger = null
+    state.consumedManualTrigger = null
     state.prune = {
         tools: new Map<string, number>(),
         messages: createPruneMessagesState(),
