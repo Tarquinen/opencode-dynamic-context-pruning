@@ -55,8 +55,16 @@ export function wrapCompressedSummary(
     format: IdFormat = "xml",
 ): string {
     const header = COMPRESSED_BLOCK_HEADER
-    const footer = formatMessageIdTag(formatBlockRef(blockId, format), undefined, format)
+    const blockRef = formatBlockRef(blockId, format)
+    const footer = formatMessageIdTag(blockRef, undefined, format)
     const body = summary.trim()
+    if (format === "xml") {
+        const hint = `[Compressed section ${blockRef} — retrieve the original content with read_original("${blockRef}") or investigate("${blockRef}", "your question") without expanding your context.]`
+        if (body.length === 0) {
+            return `${header}\n\n${hint}\n${footer}`
+        }
+        return `${header}\n${body}\n\n${hint}\n\n${footer}`
+    }
     if (body.length === 0) {
         return `${header}\n${footer}`
     }

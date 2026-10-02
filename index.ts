@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { getConfig } from "./lib/config"
 import { createCompressMessageTool, createCompressRangeTool } from "./lib/compress"
+import { createInvestigateTool, createReadOriginalTool } from "./lib/investigate"
 import {
     compressDisabledByOpencode,
     hasExplicitToolPermission,
@@ -86,6 +87,8 @@ const server: Plugin = (async (ctx) => {
                         ? createCompressMessageTool(compressToolContext)
                         : createCompressRangeTool(compressToolContext),
             }),
+            read_original: createReadOriginalTool({ client: ctx.client, state, logger }),
+            investigate: createInvestigateTool({ client: ctx.client, state, logger }),
         },
         config: async (opencodeConfig) => {
             if (
@@ -107,6 +110,7 @@ const server: Plugin = (async (ctx) => {
             if (config.compress.permission !== "deny" && !config.experimental.allowSubAgents) {
                 toolsToAdd.push("compress")
             }
+            toolsToAdd.push("read_original", "investigate")
 
             if (toolsToAdd.length > 0) {
                 const existingPrimaryTools = opencodeConfig.experimental?.primary_tools ?? []
@@ -121,6 +125,15 @@ const server: Plugin = (async (ctx) => {
                 opencodeConfig.permission = {
                     ...permission,
                     compress: config.compress.permission,
+                } as typeof permission
+            }
+
+            if (!hasExplicitToolPermission(opencodeConfig.permission, "read_original")) {
+                const permission = opencodeConfig.permission ?? {}
+                opencodeConfig.permission = {
+                    ...permission,
+                    read_original: "allow",
+                    investigate: "allow",
                 } as typeof permission
             }
 
