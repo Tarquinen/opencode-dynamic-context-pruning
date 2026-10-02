@@ -3,6 +3,7 @@ import type { Logger } from "../logger"
 import { PluginConfig } from "../config"
 import { isMessageCompacted } from "./utils"
 import { countToolTokens } from "../token-utils"
+import { getAmbiguousToolIds } from "../tool-ids"
 
 const MAX_TOOL_CACHE_SIZE = 1000
 
@@ -18,6 +19,12 @@ export function syncToolCache(
     try {
         logger.info("Syncing tool parameters from OpenCode messages")
 
+        const ambiguousIds = getAmbiguousToolIds(messages)
+        for (const id of ambiguousIds) {
+            state.toolParameters.delete(id)
+            state.prune.tools.delete(id)
+        }
+
         let turnCounter = 0
 
         for (const msg of messages) {
@@ -32,7 +39,7 @@ export function syncToolCache(
                     continue
                 }
 
-                if (part.type !== "tool" || !part.callID) {
+                if (part.type !== "tool" || !part.callID || ambiguousIds.has(part.callID)) {
                     continue
                 }
 

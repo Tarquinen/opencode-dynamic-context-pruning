@@ -7,6 +7,7 @@ import {
     mergeSubagentResult,
 } from "../../subagents/subagent-results"
 import { stripHallucinationsFromString } from "../utils"
+import { toolOccurrenceKey } from "../../tool-ids"
 
 async function fetchSubAgentMessages(client: any, sessionId: string): Promise<WithParts[]> {
     const response = await client.session.messages({
@@ -41,7 +42,8 @@ export const injectExtendedSubAgentResults = async (
                 continue
             }
 
-            const cachedResult = state.subAgentResultCache.get(part.callID)
+            const cacheKey = toolOccurrenceKey(message, part)
+            const cachedResult = state.subAgentResultCache.get(cacheKey)
             if (cachedResult !== undefined) {
                 if (cachedResult) {
                     part.state.output = stripHallucinationsFromString(
@@ -74,7 +76,7 @@ export const injectExtendedSubAgentResults = async (
                 continue
             }
 
-            state.subAgentResultCache.set(part.callID, subAgentResultText)
+            state.subAgentResultCache.set(cacheKey, subAgentResultText)
             part.state.output = stripHallucinationsFromString(
                 mergeSubagentResult(part.state.output, subAgentResultText),
                 state.idFormat,

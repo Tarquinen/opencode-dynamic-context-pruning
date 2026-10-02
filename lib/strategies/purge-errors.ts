@@ -3,6 +3,7 @@ import { Logger } from "../logger"
 import type { SessionState, WithParts } from "../state"
 import { isToolProtected } from "../protected-patterns"
 import { getTotalToolTokens } from "../token-utils"
+import { getAmbiguousToolIds } from "../tool-ids"
 
 /**
  * Purge Errors strategy - prunes tool inputs for tools that errored
@@ -32,7 +33,10 @@ export const purgeErrors = (
     }
 
     // Filter out IDs already pruned
-    const unprunedIds = allToolIds.filter((id) => !state.prune.tools.has(id))
+    const ambiguousIds = getAmbiguousToolIds(messages)
+    const unprunedIds = allToolIds.filter(
+        (id) => !state.prune.tools.has(id) && !ambiguousIds.has(id),
+    )
 
     if (unprunedIds.length === 0) {
         return

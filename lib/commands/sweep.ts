@@ -19,6 +19,7 @@ import { saveSessionState } from "../state/persistence"
 import { isMessageCompacted } from "../state/utils"
 import { isToolProtected } from "../protected-patterns"
 import { syncToolCache } from "../state/tool-cache"
+import { getAmbiguousToolIds } from "../tool-ids"
 
 export interface SweepCommandContext {
     client: any
@@ -164,8 +165,9 @@ export async function handleSweepCommand(ctx: SweepCommandContext): Promise<void
     }
 
     // Filter out already-pruned tools, protected tools, and protected file paths
+    const ambiguousIds = getAmbiguousToolIds(messages)
     const newToolIds = toolIdsToSweep.filter((id) => {
-        if (state.prune.tools.has(id)) {
+        if (state.prune.tools.has(id) || ambiguousIds.has(id)) {
             return false
         }
         const entry = state.toolParameters.get(id)

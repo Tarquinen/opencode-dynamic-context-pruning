@@ -6,6 +6,7 @@ import { createSyntheticUserMessage, replaceBlockIdsWithBlocked } from "./utils"
 import { getLastUserMessage } from "./query"
 import type { UserMessage } from "@opencode-ai/sdk/v2"
 import { formatBlockRef } from "../message-ids"
+import { getAmbiguousToolIds } from "../tool-ids"
 
 const PRUNED_TOOL_OUTPUT_REPLACEMENT =
     "[Output removed to save context - information superseded or no longer needed]"
@@ -19,6 +20,8 @@ export const prune = (
     messages: WithParts[],
     summaryBase?: WithParts,
 ): void => {
+    // Legacy persisted call IDs must not remove multiple tool occurrences.
+    for (const id of getAmbiguousToolIds(messages)) state.prune.tools.delete(id)
     filterCompressedRanges(state, logger, config, messages, summaryBase)
     // pruneFullTool(state, logger, messages)
     pruneToolOutputs(state, logger, messages)

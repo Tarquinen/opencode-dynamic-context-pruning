@@ -8,6 +8,7 @@ import {
 } from "../subagents/subagent-results"
 import { fetchSessionMessages } from "./search"
 import type { SearchContext, SelectionResolution } from "./types"
+import { toolOccurrenceKey } from "../tool-ids"
 
 export function appendProtectedUserMessages(
     summary: string,
@@ -152,7 +153,8 @@ export async function appendProtectedTools(
                         part.state?.status === "completed" &&
                         typeof part.state?.output === "string"
                     ) {
-                        const cachedSubAgentResult = state.subAgentResultCache.get(part.callID)
+                        const cacheKey = toolOccurrenceKey(message, part)
+                        const cachedSubAgentResult = state.subAgentResultCache.get(cacheKey)
 
                         if (cachedSubAgentResult !== undefined) {
                             if (cachedSubAgentResult) {
@@ -176,7 +178,7 @@ export async function appendProtectedTools(
                                 }
 
                                 if (subAgentResultText) {
-                                    state.subAgentResultCache.set(part.callID, subAgentResultText)
+                                    state.subAgentResultCache.set(cacheKey, subAgentResultText)
                                     output = mergeSubagentResult(
                                         part.state.output,
                                         subAgentResultText,
