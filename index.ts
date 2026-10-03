@@ -1,5 +1,6 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { getConfig } from "./lib/config"
+import { describeEffectiveThresholds } from "./lib/thresholds"
 import { createCompressMessageTool, createCompressRangeTool } from "./lib/compress"
 import {
     compressDisabledByOpencode,
@@ -40,8 +41,14 @@ const server: Plugin = (async (ctx) => {
         // logger.info("Secure mode detected, configured client authentication")
     }
 
+    // The config is read once, here. Logging the thresholds that are actually in
+    // force is the only way to tell a typo in dcp.jsonc from intended settings,
+    // because a schema mismatch degrades to wrong thresholds rather than failing
+    // loudly (#631).
     logger.info("DCP initialized", {
         strategies: config.strategies,
+        thresholds: describeEffectiveThresholds(config),
+        note: "config is read once at startup; restart OpenCode after editing it",
     })
 
     startAutoUpdate(ctx, config.autoUpdate)

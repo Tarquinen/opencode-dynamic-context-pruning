@@ -1,7 +1,8 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from "fs"
+﻿import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from "fs"
 import { join, dirname } from "path"
 import { homedir } from "os"
 import { parse } from "jsonc-parser/lib/esm/main.js"
+import { CONFIG_REQUIRES_RESTART_NOTE, describeEffectiveThresholds } from "./thresholds"
 import type { PluginInput } from "@opencode-ai/plugin"
 
 type ConfigContext = Pick<PluginInput, "directory"> & {
@@ -618,49 +619,56 @@ export function validateConfigTypes(config: Record<string, any>): ValidationErro
     return errors
 }
 
+interface ConfigLayerDiagnostics {
+    configPath: string
+    isProject: boolean
+    invalidKeys: string[]
+    typeErrors: ValidationError[]
+}
+
+function formatLayerDiagnostics(diagnostics: ConfigLayerDiagnostics[]): string[] {
+    const messages: string[] = []
+
+    for (const layer of diagnostics) {
+        const parts: string[] = []
+        if (layer.invalidKeys.length > 0) {
+            const keyList = layer.invalidKeys.slice(0, 3).join(", ")
+            const suffix =
+                layer.invalidKeys.length > 3 ? ` (+${layer.invalidKeys.length - 3} more)` : ""
+            parts.push(`Unknown keys: ${keyList}${suffix}`)
+        }
+        for (const err of layer.typeErrors.slice(0, 2)) {
+            parts.push(`${err.key}: expected ${err.expected}, got ${err.actual}`)
+        }
+        if (layer.typeErrors.length > 2) {
+            parts.push(`(+${layer.typeErrors.length - 2} more type errors)`)
+        }
+        if (parts.length > 0) {
+            messages.push(`${layer.configPath}\n${parts.join("\n")}`)
+        }
+    }
+
+    return messages
+}
+
 function showConfigWarnings(
     ctx: ConfigContext,
-    configPath: string,
-    configData: Record<string, any>,
-    isProject: boolean,
+    diagnostics: ConfigLayerDiagnostics[],
+    config: PluginConfig,
 ): void {
-    const invalidKeys = getInvalidConfigKeys(configData)
-    const typeErrors = validateConfigTypes(configData)
-
-    if (invalidKeys.length === 0 && typeErrors.length === 0) {
+    if (diagnostics.length === 0) {
         return
     }
 
+    const isProject = diagnostics.some((layer) => layer.isProject)
     const configType = isProject ? "project config" : "config"
-    const messages: string[] = []
+    const body = [
+        ...formatLayerDiagnostics(diagnostics),
+        describeEffectiveThresholds(config),
+        CONFIG_REQUIRES_RESTART_NOTE,
+    ].join("\n\n")
 
-    if (invalidKeys.length > 0) {
-        const keyList = invalidKeys.slice(0, 3).join(", ")
-        const suffix = invalidKeys.length > 3 ? ` (+${invalidKeys.length - 3} more)` : ""
-        messages.push(`Unknown keys: ${keyList}${suffix}`)
-    }
-
-    if (typeErrors.length > 0) {
-        for (const err of typeErrors.slice(0, 2)) {
-            messages.push(`${err.key}: expected ${err.expected}, got ${err.actual}`)
-        }
-        if (typeErrors.length > 2) {
-            messages.push(`(+${typeErrors.length - 2} more type errors)`)
-        }
-    }
-
-    setTimeout(() => {
-        try {
-            ctx.client.tui.showToast({
-                body: {
-                    title: `DCP: ${configType} warning`,
-                    message: `${configPath}\n${messages.join("\n")}`,
-                    variant: "warning",
-                    duration: 7000,
-                },
-            })
-        } catch {}
-    }, 7000)
+    scheduleParseWarning(ctx, `DCP: ${configType} warning`, body)
 }
 
 const defaultConfig: PluginConfig = {
@@ -989,6 +997,7 @@ export function getConfig(ctx: ConfigContext): PluginConfig {
         { path: configPaths.configDir, name: "configDir config", isProject: true },
         { path: configPaths.project, name: "project config", isProject: true },
     ]
+    const diagnostics: ConfigLayerDiagnostics[] = []
 
     for (const layer of layers) {
         if (!layer.path) {
@@ -1009,9 +1018,23 @@ export function getConfig(ctx: ConfigContext): PluginConfig {
             continue
         }
 
-        showConfigWarnings(ctx, layer.path, result.data, layer.isProject)
+        const invalidKeys = getInvalidConfigKeys(result.data)
+        const typeErrors = validateConfigTypes(result.data)
+        if (invalidKeys.length > 0 || typeErrors.length > 0) {
+            diagnostics.push({
+                configPath: layer.path,
+                isProject: layer.isProject,
+                invalidKeys,
+                typeErrors,
+            })
+        }
+
         config = mergeLayer(config, result.data)
     }
+
+    // Emitted after the merge, so the warning can name the thresholds that are
+    // actually in force rather than the ones the offending layer tried to set.
+    showConfigWarnings(ctx, diagnostics, config)
 
     return config
 }
