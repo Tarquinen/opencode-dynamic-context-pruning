@@ -27,7 +27,18 @@ function transcript(): Message[] {
             id: "msg_user",
             role: "user",
             content: [
-                { type: "media", mediaType: "image/png", data: new Uint8Array([0, 255]) },
+                {
+                    type: "media",
+                    media: {
+                        source: {
+                            type: "bytes",
+                            data: new Uint8Array([0, 255]),
+                            mediaType: "image/png",
+                        },
+                        mediaType: "image/png",
+                        kind: "image",
+                    },
+                },
                 { type: "text", text: "Inspect this", cache: { type: "ephemeral" } },
             ],
         },

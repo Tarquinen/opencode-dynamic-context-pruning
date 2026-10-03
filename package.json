@@ -57,22 +57,24 @@
     "author": "tarquinen",
     "license": "AGPL-3.0-or-later",
     "peerDependencies": {
-        "@opencode-ai/plugin": ">=1.18.29"
+        "@opencode-ai/plugin": ">=1.18.29",
+        "@opentui/core": ">=0.5.14",
+        "@opentui/solid": ">=0.5.14",
+        "solid-js": ">=1.9.0"
     },
     "dependencies": {
         "@anthropic-ai/tokenizer": "^0.0.4",
         "@opencode-ai/sdk": "^1.4.3",
-        "@opentui/core": "^0.4.5",
-        "@opentui/solid": "^0.4.5",
-        "jsonc-parser": "^3.3.1",
-        "solid-js": "^1.9.12"
+        "jsonc-parser": "^3.3.1"
     },
     "devDependencies": {
         "@opencode-ai/plugin": "^1.18.29",
-        "@opencode/plugin": "^2.0.4",
-        "@opencode/theme": "^2.0.4",
+        "@opencode/plugin": "^2.0.22",
+        "@opentui/core": "^0.5.14",
+        "@opentui/solid": "^0.5.14",
         "@types/node": "^25.5.0",
         "prettier": "^3.8.1",
+        "solid-js": "^1.9.12",
         "tsup": "^8.5.1",
         "tsx": "^4.21.0",
         "typescript": "^6.0.2"
