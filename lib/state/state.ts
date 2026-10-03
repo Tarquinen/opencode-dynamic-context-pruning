@@ -104,37 +104,22 @@ export function createSessionState(idFormat: IdFormat = "xml"): SessionState {
     }
 }
 
+/**
+ * Resets every mutable field back to its initial value. The id format and the
+ * three long-lived collections are carried over rather than replaced, so
+ * external references to them stay valid.
+ */
 export function resetSessionState(state: SessionState): void {
-    state.sessionId = null
-    state.isSubAgent = false
-    state.manualMode = false
-    state.compressPermission = undefined
-    state.pendingManualTrigger = null
-    state.prune = {
-        tools: new Map<string, number>(),
-        messages: createPruneMessagesState(),
-    }
-    state.nudges = {
-        contextLimitAnchors: new Set<string>(),
-        turnNudgeAnchors: new Set<string>(),
-        iterationNudgeAnchors: new Set<string>(),
-    }
-    state.stats = {
-        pruneTokenCounter: 0,
-        totalPruneTokens: 0,
-    }
-    state.toolParameters.clear()
-    state.subAgentResultCache.clear()
-    state.toolIdList = []
-    state.messageIds = {
-        byRawId: new Map<string, string>(),
-        byRef: new Map<string, string>(),
-        nextRef: 1,
-    }
-    state.lastCompaction = 0
-    state.currentTurn = 0
-    state.modelContextLimit = undefined
-    state.systemPromptTokens = undefined
+    const { idFormat, toolParameters, subAgentResultCache, compressionTiming } = state
+    const fresh = createSessionState(idFormat)
+
+    toolParameters.clear()
+    subAgentResultCache.clear()
+    fresh.toolParameters = toolParameters
+    fresh.subAgentResultCache = subAgentResultCache
+    fresh.compressionTiming = compressionTiming
+
+    Object.assign(state, fresh)
 }
 
 export async function ensureSessionInitialized(

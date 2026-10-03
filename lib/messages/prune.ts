@@ -20,59 +20,13 @@ export const prune = (
     summaryBase?: WithParts,
 ): void => {
     filterCompressedRanges(state, logger, config, messages, summaryBase)
-    // pruneFullTool(state, logger, messages)
-    pruneToolOutputs(state, logger, messages)
-    pruneToolInputs(state, logger, messages)
-    pruneToolErrors(state, logger, messages)
+    pruneToolState(state, messages)
 }
 
-const pruneFullTool = (state: SessionState, logger: Logger, messages: WithParts[]): void => {
-    const messagesToRemove: string[] = []
+/** Tools whose completed output is meaningful enough to keep. */
+const OUTPUT_PRESERVED_TOOLS = new Set(["question", "edit", "write"])
 
-    for (const msg of messages) {
-        if (isMessageCompacted(state, msg)) {
-            continue
-        }
-
-        const parts = Array.isArray(msg.parts) ? msg.parts : []
-        const partsToRemove: string[] = []
-
-        for (const part of parts) {
-            if (part.type !== "tool") {
-                continue
-            }
-
-            if (!state.prune.tools.has(part.callID)) {
-                continue
-            }
-            if (part.tool !== "edit" && part.tool !== "write") {
-                continue
-            }
-
-            partsToRemove.push(part.callID)
-        }
-
-        if (partsToRemove.length === 0) {
-            continue
-        }
-
-        msg.parts = parts.filter(
-            (part) => part.type !== "tool" || !partsToRemove.includes(part.callID),
-        )
-
-        if (msg.parts.length === 0) {
-            messagesToRemove.push(msg.info.id)
-        }
-    }
-
-    if (messagesToRemove.length > 0) {
-        const result = messages.filter((msg) => !messagesToRemove.includes(msg.info.id))
-        messages.length = 0
-        messages.push(...result)
-    }
-}
-
-const pruneToolOutputs = (state: SessionState, logger: Logger, messages: WithParts[]): void => {
+const pruneToolState = (state: SessionState, messages: WithParts[]): void => {
     for (const msg of messages) {
         if (isMessageCompacted(state, msg)) {
             continue
@@ -86,61 +40,18 @@ const pruneToolOutputs = (state: SessionState, logger: Logger, messages: WithPar
             if (!state.prune.tools.has(part.callID)) {
                 continue
             }
-            if (part.state.status !== "completed") {
-                continue
-            }
-            if (part.tool === "question" || part.tool === "edit" || part.tool === "write") {
+
+            if (part.state.status === "completed") {
+                if (part.tool === "question") {
+                    if (part.state.input?.questions !== undefined) {
+                        part.state.input.questions = PRUNED_QUESTION_INPUT_REPLACEMENT
+                    }
+                } else if (!OUTPUT_PRESERVED_TOOLS.has(part.tool)) {
+                    part.state.output = PRUNED_TOOL_OUTPUT_REPLACEMENT
+                }
                 continue
             }
 
-            part.state.output = PRUNED_TOOL_OUTPUT_REPLACEMENT
-        }
-    }
-}
-
-const pruneToolInputs = (state: SessionState, logger: Logger, messages: WithParts[]): void => {
-    for (const msg of messages) {
-        if (isMessageCompacted(state, msg)) {
-            continue
-        }
-
-        const parts = Array.isArray(msg.parts) ? msg.parts : []
-        for (const part of parts) {
-            if (part.type !== "tool") {
-                continue
-            }
-
-            if (!state.prune.tools.has(part.callID)) {
-                continue
-            }
-            if (part.state.status !== "completed") {
-                continue
-            }
-            if (part.tool !== "question") {
-                continue
-            }
-
-            if (part.state.input?.questions !== undefined) {
-                part.state.input.questions = PRUNED_QUESTION_INPUT_REPLACEMENT
-            }
-        }
-    }
-}
-
-const pruneToolErrors = (state: SessionState, logger: Logger, messages: WithParts[]): void => {
-    for (const msg of messages) {
-        if (isMessageCompacted(state, msg)) {
-            continue
-        }
-
-        const parts = Array.isArray(msg.parts) ? msg.parts : []
-        for (const part of parts) {
-            if (part.type !== "tool") {
-                continue
-            }
-            if (!state.prune.tools.has(part.callID)) {
-                continue
-            }
             if (part.state.status !== "error") {
                 continue
             }

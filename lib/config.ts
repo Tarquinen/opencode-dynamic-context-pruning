@@ -100,51 +100,11 @@ const DEFAULT_PROTECTED_TOOLS = [
 
 const COMPRESS_DEFAULT_PROTECTED_TOOLS = ["task", "skill", "todowrite", "todoread"]
 
-export const VALID_CONFIG_KEYS = new Set([
-    "$schema",
-    "enabled",
-    "autoUpdate",
-    "debug",
-    "showUpdateToasts",
-    "pruneNotification",
-    "pruneNotificationType",
-    "turnProtection",
-    "turnProtection.enabled",
-    "turnProtection.turns",
-    "experimental",
-    "experimental.allowSubAgents",
-    "experimental.customPrompts",
-    "protectedFilePatterns",
-    "commands",
-    "commands.enabled",
-    "commands.protectedTools",
-    "manualMode",
-    "manualMode.enabled",
-    "manualMode.automaticStrategies",
-    "compress",
-    "compress.mode",
-    "compress.permission",
-    "compress.showCompression",
-    "compress.summaryBuffer",
-    "compress.maxContextLimit",
-    "compress.minContextLimit",
-    "compress.modelMaxLimits",
-    "compress.modelMinLimits",
-    "compress.nudgeFrequency",
-    "compress.iterationNudgeThreshold",
-    "compress.nudgeForce",
-    "compress.protectedTools",
-    "compress.protectTags",
-    "compress.protectUserMessages",
-    "strategies",
-    "strategies.deduplication",
-    "strategies.deduplication.enabled",
-    "strategies.deduplication.protectedTools",
-    "strategies.purgeErrors",
-    "strategies.purgeErrors.enabled",
-    "strategies.purgeErrors.turns",
-    "strategies.purgeErrors.protectedTools",
-])
+/**
+ * Keys that are valid but absent from `defaultConfig`: the `$schema` marker we
+ * write into generated files, and the two optional per-model limit maps.
+ */
+const OPTIONAL_CONFIG_KEYS = ["$schema", "compress.modelMaxLimits", "compress.modelMinLimits"]
 
 function getConfigKeyPaths(obj: Record<string, any>, prefix = ""): string[] {
     const keys: string[] = []
@@ -165,8 +125,8 @@ function getConfigKeyPaths(obj: Record<string, any>, prefix = ""): string[] {
 }
 
 export function getInvalidConfigKeys(userConfig: Record<string, any>): string[] {
-    const userKeys = getConfigKeyPaths(userConfig)
-    return userKeys.filter((key) => !VALID_CONFIG_KEYS.has(key))
+    const known = new Set([...getConfigKeyPaths(defaultConfig), ...OPTIONAL_CONFIG_KEYS])
+    return getConfigKeyPaths(userConfig).filter((key) => !known.has(key))
 }
 
 interface ValidationError {
@@ -175,447 +135,178 @@ interface ValidationError {
     actual: string
 }
 
-export function validateConfigTypes(config: Record<string, any>): ValidationError[] {
+/**
+ * A rule reports `null` for a valid value, a bare string for the rule's fixed
+ * `expected` label, or an explicit `{ expected, actual }` pair for the handful of
+ * checks whose message varies with the offending value.
+ */
+type Violation = string | { expected: string; actual: string }
+
+interface Rule {
+    expected: string
+    check: (value: unknown) => Violation | null
+}
+
+const booleanRule: Rule = {
+    expected: "boolean",
+    check: (value) => (typeof value === "boolean" ? null : typeof value),
+}
+
+const objectRule = (skipFalsy = false): Rule => ({
+    expected: "object",
+    check: (value) =>
+        skipFalsy && !value
+            ? null
+            : typeof value === "object" && value !== null && !Array.isArray(value)
+              ? null
+              : typeof value,
+})
+
+const toolListRule: Rule = {
+    expected: "string[]",
+    check: (value) => (Array.isArray(value) ? null : typeof value),
+}
+
+const patternListRule: Rule = {
+    expected: "string[]",
+    check: (value) =>
+        Array.isArray(value)
+            ? value.every((entry) => typeof entry === "string")
+                ? null
+                : "non-string entries"
+            : typeof value,
+}
+
+const enumerationRule = (...allowed: string[]): Rule => ({
+    expected: allowed.map((value) => `"${value}"`).join(" | "),
+    check: (value) => (allowed.includes(value as string) ? null : JSON.stringify(value)),
+})
+
+/** `min` adds the "below the usable floor" warning the value gets clamped away from. */
+const numberRule = (min?: { label: string; suffix: string }): Rule => ({
+    expected: "number",
+    check: (value) =>
+        typeof value !== "number"
+            ? typeof value
+            : min && value < 1
+              ? { expected: min.label, actual: `${value}${min.suffix}` }
+              : null,
+})
+
+const limitRule: Rule = {
+    expected: 'number | "${number}%"',
+    check: (value) =>
+        typeof value === "number" || (typeof value === "string" && value.endsWith("%"))
+            ? null
+            : JSON.stringify(value),
+}
+
+const modelLimitMapRule: Rule = {
+    expected: "Record<string, number | ${number}%>",
+    check: (value) =>
+        typeof value === "object" && value !== null && !Array.isArray(value) ? null : typeof value,
+}
+
+const CLAMPED_POSITIVE = { label: "positive number (>= 1)", suffix: " (will be clamped to 1)" }
+
+/**
+ * Every accepted key with its type check, keyed by the same dotted paths
+ * `getInvalidConfigKeys` uses. `dcp.schema.json` carries the same shape for
+ * editors; this table exists to warn at load time.
+ */
+const CONFIG_RULES: Record<string, Rule> = {
+    enabled: booleanRule,
+    autoUpdate: booleanRule,
+    debug: booleanRule,
+    pruneNotification: enumerationRule("off", "minimal", "detailed"),
+    pruneNotificationType: enumerationRule("chat", "toast"),
+    protectedFilePatterns: patternListRule,
+    turnProtection: objectRule(true),
+    "turnProtection.enabled": booleanRule,
+    "turnProtection.turns": numberRule({ label: "positive number (>= 1)", suffix: "" }),
+    experimental: objectRule(),
+    "experimental.allowSubAgents": booleanRule,
+    "experimental.customPrompts": booleanRule,
+    commands: objectRule(),
+    "commands.enabled": booleanRule,
+    "commands.protectedTools": toolListRule,
+    manualMode: objectRule(),
+    "manualMode.enabled": booleanRule,
+    "manualMode.automaticStrategies": booleanRule,
+    compress: objectRule(),
+    "compress.mode": enumerationRule("range", "message"),
+    "compress.summaryBuffer": booleanRule,
+    "compress.nudgeFrequency": numberRule(CLAMPED_POSITIVE),
+    "compress.iterationNudgeThreshold": numberRule(CLAMPED_POSITIVE),
+    "compress.nudgeForce": enumerationRule("strong", "soft"),
+    "compress.protectedTools": toolListRule,
+    "compress.protectTags": booleanRule,
+    "compress.protectUserMessages": booleanRule,
+    "compress.maxContextLimit": limitRule,
+    "compress.minContextLimit": limitRule,
+    "compress.modelMaxLimits": modelLimitMapRule,
+    "compress.modelMinLimits": modelLimitMapRule,
+    "compress.permission": enumerationRule("ask", "allow", "deny"),
+    "compress.showCompression": booleanRule,
+    "strategies.deduplication.enabled": booleanRule,
+    "strategies.deduplication.protectedTools": toolListRule,
+    "strategies.purgeErrors.enabled": booleanRule,
+    "strategies.purgeErrors.turns": numberRule(CLAMPED_POSITIVE),
+    "strategies.purgeErrors.protectedTools": toolListRule,
+}
+
+function readConfigPath(config: Record<string, any>, path: string): unknown {
+    let value: unknown = config
+    for (const segment of path.split(".")) {
+        if (typeof value !== "object" || value === null) return undefined
+        value = (value as Record<string, unknown>)[segment]
+    }
+    return value
+}
+
+/** Per-model entries of the two dynamic limit maps, keyed `compress.modelMaxLimits.<id>`. */
+function validateModelLimitEntries(config: Record<string, any>): ValidationError[] {
     const errors: ValidationError[] = []
+    const compress = readConfigPath(config, "compress")
+    if (typeof compress !== "object" || compress === null || Array.isArray(compress)) return errors
 
-    if (config.enabled !== undefined && typeof config.enabled !== "boolean") {
-        errors.push({ key: "enabled", expected: "boolean", actual: typeof config.enabled })
-    }
+    for (const field of ["modelMaxLimits", "modelMinLimits"] as const) {
+        const limits = (compress as Record<string, unknown>)[field]
+        if (typeof limits !== "object" || limits === null || Array.isArray(limits)) continue
 
-    if (config.autoUpdate !== undefined && typeof config.autoUpdate !== "boolean") {
-        errors.push({ key: "autoUpdate", expected: "boolean", actual: typeof config.autoUpdate })
-    }
-
-    if (config.debug !== undefined && typeof config.debug !== "boolean") {
-        errors.push({ key: "debug", expected: "boolean", actual: typeof config.debug })
-    }
-
-    if (config.pruneNotification !== undefined) {
-        const validValues = ["off", "minimal", "detailed"]
-        if (!validValues.includes(config.pruneNotification)) {
-            errors.push({
-                key: "pruneNotification",
-                expected: '"off" | "minimal" | "detailed"',
-                actual: JSON.stringify(config.pruneNotification),
-            })
-        }
-    }
-
-    if (config.pruneNotificationType !== undefined) {
-        const validValues = ["chat", "toast"]
-        if (!validValues.includes(config.pruneNotificationType)) {
-            errors.push({
-                key: "pruneNotificationType",
-                expected: '"chat" | "toast"',
-                actual: JSON.stringify(config.pruneNotificationType),
-            })
-        }
-    }
-
-    if (config.protectedFilePatterns !== undefined) {
-        if (!Array.isArray(config.protectedFilePatterns)) {
-            errors.push({
-                key: "protectedFilePatterns",
-                expected: "string[]",
-                actual: typeof config.protectedFilePatterns,
-            })
-        } else if (!config.protectedFilePatterns.every((v: unknown) => typeof v === "string")) {
-            errors.push({
-                key: "protectedFilePatterns",
-                expected: "string[]",
-                actual: "non-string entries",
-            })
-        }
-    }
-
-    if (config.turnProtection) {
-        if (
-            config.turnProtection.enabled !== undefined &&
-            typeof config.turnProtection.enabled !== "boolean"
-        ) {
-            errors.push({
-                key: "turnProtection.enabled",
-                expected: "boolean",
-                actual: typeof config.turnProtection.enabled,
-            })
-        }
-
-        if (
-            config.turnProtection.turns !== undefined &&
-            typeof config.turnProtection.turns !== "number"
-        ) {
-            errors.push({
-                key: "turnProtection.turns",
-                expected: "number",
-                actual: typeof config.turnProtection.turns,
-            })
-        }
-        if (typeof config.turnProtection.turns === "number" && config.turnProtection.turns < 1) {
-            errors.push({
-                key: "turnProtection.turns",
-                expected: "positive number (>= 1)",
-                actual: `${config.turnProtection.turns}`,
-            })
-        }
-    }
-
-    const experimental = config.experimental
-    if (experimental !== undefined) {
-        if (
-            typeof experimental !== "object" ||
-            experimental === null ||
-            Array.isArray(experimental)
-        ) {
-            errors.push({
-                key: "experimental",
-                expected: "object",
-                actual: typeof experimental,
-            })
-        } else {
-            if (
-                experimental.allowSubAgents !== undefined &&
-                typeof experimental.allowSubAgents !== "boolean"
-            ) {
+        for (const [modelKey, limit] of Object.entries(limits as Record<string, unknown>)) {
+            const isPercent = typeof limit === "string" && /^\d+(?:\.\d+)?%$/.test(limit)
+            if (typeof limit !== "number" && !isPercent) {
                 errors.push({
-                    key: "experimental.allowSubAgents",
-                    expected: "boolean",
-                    actual: typeof experimental.allowSubAgents,
-                })
-            }
-
-            if (
-                experimental.customPrompts !== undefined &&
-                typeof experimental.customPrompts !== "boolean"
-            ) {
-                errors.push({
-                    key: "experimental.customPrompts",
-                    expected: "boolean",
-                    actual: typeof experimental.customPrompts,
-                })
-            }
-        }
-    }
-
-    const commands = config.commands
-    if (commands !== undefined) {
-        if (typeof commands !== "object" || commands === null || Array.isArray(commands)) {
-            errors.push({
-                key: "commands",
-                expected: "object",
-                actual: typeof commands,
-            })
-        } else {
-            if (commands.enabled !== undefined && typeof commands.enabled !== "boolean") {
-                errors.push({
-                    key: "commands.enabled",
-                    expected: "boolean",
-                    actual: typeof commands.enabled,
-                })
-            }
-            if (commands.protectedTools !== undefined && !Array.isArray(commands.protectedTools)) {
-                errors.push({
-                    key: "commands.protectedTools",
-                    expected: "string[]",
-                    actual: typeof commands.protectedTools,
-                })
-            }
-        }
-    }
-
-    const manualMode = config.manualMode
-    if (manualMode !== undefined) {
-        if (typeof manualMode !== "object" || manualMode === null || Array.isArray(manualMode)) {
-            errors.push({
-                key: "manualMode",
-                expected: "object",
-                actual: typeof manualMode,
-            })
-        } else {
-            if (manualMode.enabled !== undefined && typeof manualMode.enabled !== "boolean") {
-                errors.push({
-                    key: "manualMode.enabled",
-                    expected: "boolean",
-                    actual: typeof manualMode.enabled,
-                })
-            }
-
-            if (
-                manualMode.automaticStrategies !== undefined &&
-                typeof manualMode.automaticStrategies !== "boolean"
-            ) {
-                errors.push({
-                    key: "manualMode.automaticStrategies",
-                    expected: "boolean",
-                    actual: typeof manualMode.automaticStrategies,
-                })
-            }
-        }
-    }
-
-    const compress = config.compress
-    if (compress !== undefined) {
-        if (typeof compress !== "object" || compress === null || Array.isArray(compress)) {
-            errors.push({
-                key: "compress",
-                expected: "object",
-                actual: typeof compress,
-            })
-        } else {
-            if (
-                compress.mode !== undefined &&
-                compress.mode !== "range" &&
-                compress.mode !== "message"
-            ) {
-                errors.push({
-                    key: "compress.mode",
-                    expected: '"range" | "message"',
-                    actual: JSON.stringify(compress.mode),
-                })
-            }
-
-            if (
-                compress.summaryBuffer !== undefined &&
-                typeof compress.summaryBuffer !== "boolean"
-            ) {
-                errors.push({
-                    key: "compress.summaryBuffer",
-                    expected: "boolean",
-                    actual: typeof compress.summaryBuffer,
-                })
-            }
-
-            if (
-                compress.nudgeFrequency !== undefined &&
-                typeof compress.nudgeFrequency !== "number"
-            ) {
-                errors.push({
-                    key: "compress.nudgeFrequency",
-                    expected: "number",
-                    actual: typeof compress.nudgeFrequency,
-                })
-            }
-
-            if (typeof compress.nudgeFrequency === "number" && compress.nudgeFrequency < 1) {
-                errors.push({
-                    key: "compress.nudgeFrequency",
-                    expected: "positive number (>= 1)",
-                    actual: `${compress.nudgeFrequency} (will be clamped to 1)`,
-                })
-            }
-
-            if (
-                compress.iterationNudgeThreshold !== undefined &&
-                typeof compress.iterationNudgeThreshold !== "number"
-            ) {
-                errors.push({
-                    key: "compress.iterationNudgeThreshold",
-                    expected: "number",
-                    actual: typeof compress.iterationNudgeThreshold,
-                })
-            }
-
-            if (
-                compress.nudgeForce !== undefined &&
-                compress.nudgeForce !== "strong" &&
-                compress.nudgeForce !== "soft"
-            ) {
-                errors.push({
-                    key: "compress.nudgeForce",
-                    expected: '"strong" | "soft"',
-                    actual: JSON.stringify(compress.nudgeForce),
-                })
-            }
-
-            if (compress.protectedTools !== undefined && !Array.isArray(compress.protectedTools)) {
-                errors.push({
-                    key: "compress.protectedTools",
-                    expected: "string[]",
-                    actual: typeof compress.protectedTools,
-                })
-            }
-
-            if (compress.protectTags !== undefined && typeof compress.protectTags !== "boolean") {
-                errors.push({
-                    key: "compress.protectTags",
-                    expected: "boolean",
-                    actual: typeof compress.protectTags,
-                })
-            }
-
-            if (
-                compress.protectUserMessages !== undefined &&
-                typeof compress.protectUserMessages !== "boolean"
-            ) {
-                errors.push({
-                    key: "compress.protectUserMessages",
-                    expected: "boolean",
-                    actual: typeof compress.protectUserMessages,
-                })
-            }
-
-            if (
-                typeof compress.iterationNudgeThreshold === "number" &&
-                compress.iterationNudgeThreshold < 1
-            ) {
-                errors.push({
-                    key: "compress.iterationNudgeThreshold",
-                    expected: "positive number (>= 1)",
-                    actual: `${compress.iterationNudgeThreshold} (will be clamped to 1)`,
-                })
-            }
-
-            const validateLimitValue = (
-                key: string,
-                value: unknown,
-                actualValue: unknown = value,
-            ): void => {
-                const isValidNumber = typeof value === "number"
-                const isPercentString = typeof value === "string" && value.endsWith("%")
-
-                if (!isValidNumber && !isPercentString) {
-                    errors.push({
-                        key,
-                        expected: 'number | "${number}%"',
-                        actual: JSON.stringify(actualValue),
-                    })
-                }
-            }
-
-            const validateModelLimits = (
-                key: "compress.modelMaxLimits" | "compress.modelMinLimits",
-                limits: unknown,
-            ): void => {
-                if (limits === undefined) {
-                    return
-                }
-
-                if (typeof limits !== "object" || limits === null || Array.isArray(limits)) {
-                    errors.push({
-                        key,
-                        expected: "Record<string, number | ${number}%>",
-                        actual: typeof limits,
-                    })
-                    return
-                }
-
-                for (const [providerModelKey, limit] of Object.entries(limits)) {
-                    const isValidNumber = typeof limit === "number"
-                    const isPercentString =
-                        typeof limit === "string" && /^\d+(?:\.\d+)?%$/.test(limit)
-                    if (!isValidNumber && !isPercentString) {
-                        errors.push({
-                            key: `${key}.${providerModelKey}`,
-                            expected: 'number | "${number}%"',
-                            actual: JSON.stringify(limit),
-                        })
-                    }
-                }
-            }
-
-            if (compress.maxContextLimit !== undefined) {
-                validateLimitValue("compress.maxContextLimit", compress.maxContextLimit)
-            }
-
-            if (compress.minContextLimit !== undefined) {
-                validateLimitValue("compress.minContextLimit", compress.minContextLimit)
-            }
-
-            validateModelLimits("compress.modelMaxLimits", compress.modelMaxLimits)
-            validateModelLimits("compress.modelMinLimits", compress.modelMinLimits)
-
-            const validValues = ["ask", "allow", "deny"]
-            if (compress.permission !== undefined && !validValues.includes(compress.permission)) {
-                errors.push({
-                    key: "compress.permission",
-                    expected: '"ask" | "allow" | "deny"',
-                    actual: JSON.stringify(compress.permission),
-                })
-            }
-
-            if (
-                compress.showCompression !== undefined &&
-                typeof compress.showCompression !== "boolean"
-            ) {
-                errors.push({
-                    key: "compress.showCompression",
-                    expected: "boolean",
-                    actual: typeof compress.showCompression,
-                })
-            }
-        }
-    }
-
-    const strategies = config.strategies
-    if (strategies) {
-        if (
-            strategies.deduplication?.enabled !== undefined &&
-            typeof strategies.deduplication.enabled !== "boolean"
-        ) {
-            errors.push({
-                key: "strategies.deduplication.enabled",
-                expected: "boolean",
-                actual: typeof strategies.deduplication.enabled,
-            })
-        }
-
-        if (
-            strategies.deduplication?.protectedTools !== undefined &&
-            !Array.isArray(strategies.deduplication.protectedTools)
-        ) {
-            errors.push({
-                key: "strategies.deduplication.protectedTools",
-                expected: "string[]",
-                actual: typeof strategies.deduplication.protectedTools,
-            })
-        }
-
-        if (strategies.purgeErrors) {
-            if (
-                strategies.purgeErrors.enabled !== undefined &&
-                typeof strategies.purgeErrors.enabled !== "boolean"
-            ) {
-                errors.push({
-                    key: "strategies.purgeErrors.enabled",
-                    expected: "boolean",
-                    actual: typeof strategies.purgeErrors.enabled,
-                })
-            }
-
-            if (
-                strategies.purgeErrors.turns !== undefined &&
-                typeof strategies.purgeErrors.turns !== "number"
-            ) {
-                errors.push({
-                    key: "strategies.purgeErrors.turns",
-                    expected: "number",
-                    actual: typeof strategies.purgeErrors.turns,
-                })
-            }
-            // Warn if turns is 0 or negative - will be clamped to 1
-            if (
-                typeof strategies.purgeErrors.turns === "number" &&
-                strategies.purgeErrors.turns < 1
-            ) {
-                errors.push({
-                    key: "strategies.purgeErrors.turns",
-                    expected: "positive number (>= 1)",
-                    actual: `${strategies.purgeErrors.turns} (will be clamped to 1)`,
-                })
-            }
-            if (
-                strategies.purgeErrors.protectedTools !== undefined &&
-                !Array.isArray(strategies.purgeErrors.protectedTools)
-            ) {
-                errors.push({
-                    key: "strategies.purgeErrors.protectedTools",
-                    expected: "string[]",
-                    actual: typeof strategies.purgeErrors.protectedTools,
+                    key: `compress.${field}.${modelKey}`,
+                    expected: 'number | "${number}%"',
+                    actual: JSON.stringify(limit),
                 })
             }
         }
     }
 
     return errors
+}
+
+export function validateConfigTypes(config: Record<string, any>): ValidationError[] {
+    const errors: ValidationError[] = []
+
+    for (const [key, rule] of Object.entries(CONFIG_RULES)) {
+        const value = readConfigPath(config, key)
+        if (value === undefined) continue
+
+        const violation = rule.check(value)
+        if (!violation) continue
+
+        errors.push(
+            typeof violation === "string"
+                ? { key, expected: rule.expected, actual: violation }
+                : { key, expected: violation.expected, actual: violation.actual },
+        )
+    }
+
+    return errors.concat(validateModelLimitEntries(config))
 }
 
 function showConfigWarnings(
@@ -735,44 +426,28 @@ function findOpencodeDir(startDir: string): string | null {
     return null
 }
 
+/** Prefers `dcp.jsonc`, falls back to `dcp.json`; null when the directory has neither. */
+function configInDir(dir: string): string | null {
+    for (const name of ["dcp.jsonc", "dcp.json"]) {
+        const candidate = join(dir, name)
+        if (existsSync(candidate)) return candidate
+    }
+    return null
+}
+
 function getConfigPaths(ctx?: ConfigContext): {
     global: string | null
     configDir: string | null
     project: string | null
 } {
-    const global = existsSync(GLOBAL_CONFIG_PATH_JSONC)
-        ? GLOBAL_CONFIG_PATH_JSONC
-        : existsSync(GLOBAL_CONFIG_PATH_JSON)
-          ? GLOBAL_CONFIG_PATH_JSON
-          : null
-
-    let configDir: string | null = null
     const opencodeConfigDir = process.env.OPENCODE_CONFIG_DIR
-    if (opencodeConfigDir) {
-        const configJsonc = join(opencodeConfigDir, "dcp.jsonc")
-        const configJson = join(opencodeConfigDir, "dcp.json")
-        configDir = existsSync(configJsonc)
-            ? configJsonc
-            : existsSync(configJson)
-              ? configJson
-              : null
-    }
+    const opencodeDir = ctx?.directory ? findOpencodeDir(ctx.directory) : null
 
-    let project: string | null = null
-    if (ctx?.directory) {
-        const opencodeDir = findOpencodeDir(ctx.directory)
-        if (opencodeDir) {
-            const projectJsonc = join(opencodeDir, "dcp.jsonc")
-            const projectJson = join(opencodeDir, "dcp.json")
-            project = existsSync(projectJsonc)
-                ? projectJsonc
-                : existsSync(projectJson)
-                  ? projectJson
-                  : null
-        }
+    return {
+        global: configInDir(GLOBAL_CONFIG_DIR),
+        configDir: opencodeConfigDir ? configInDir(opencodeConfigDir) : null,
+        project: opencodeDir ? configInDir(opencodeDir) : null,
     }
-
-    return { global, configDir, project }
 }
 
 function createDefaultConfig(): void {
@@ -811,154 +486,55 @@ function loadConfigFile(configPath: string): ConfigLoadResult {
     }
 }
 
-function mergeStrategies(
-    base: PluginConfig["strategies"],
-    override?: Partial<PluginConfig["strategies"]>,
-): PluginConfig["strategies"] {
-    if (!override) {
-        return base
+/**
+ * Arrays a user extends rather than replaces: an override appends to the default
+ * list (deduped) instead of swapping it out.
+ */
+const UNION_ARRAY_KEYS = new Set([
+    "commands.protectedTools",
+    "compress.protectedTools",
+    "protectedFilePatterns",
+    "strategies.deduplication.protectedTools",
+    "strategies.purgeErrors.protectedTools",
+])
+
+/**
+ * Objects replaced wholesale rather than merged key-by-key, so a project config
+ * cannot leave a single stale model behind in a base config's limits map.
+ */
+const REPLACE_WHOLE_KEYS = new Set(["compress.modelMaxLimits", "compress.modelMinLimits"])
+
+const isPlainObject = (value: unknown): value is Record<string, any> =>
+    typeof value === "object" && value !== null && !Array.isArray(value)
+
+/**
+ * Merges one config layer over the accumulated defaults: absent keys keep their
+ * default, scalar keys are replaced, `protectedTools`/pattern lists are unioned,
+ * and the two per-model limit maps are swapped whole.
+ */
+function mergeConfigLayer<T extends Record<string, any>>(base: T, override: any, prefix = ""): T {
+    const merged: Record<string, any> = { ...base }
+
+    for (const [key, value] of Object.entries(override)) {
+        if (value === undefined) continue
+
+        const path = prefix ? `${prefix}.${key}` : key
+        const current = merged[key]
+
+        if (UNION_ARRAY_KEYS.has(path)) {
+            merged[key] = [...new Set([...((current as string[]) ?? []), ...(value as string[])])]
+        } else if (
+            !REPLACE_WHOLE_KEYS.has(path) &&
+            isPlainObject(value) &&
+            isPlainObject(current)
+        ) {
+            merged[key] = mergeConfigLayer(current, value, path)
+        } else {
+            merged[key] = value
+        }
     }
 
-    return {
-        deduplication: {
-            enabled: override.deduplication?.enabled ?? base.deduplication.enabled,
-            protectedTools: [
-                ...new Set([
-                    ...base.deduplication.protectedTools,
-                    ...(override.deduplication?.protectedTools ?? []),
-                ]),
-            ],
-        },
-        purgeErrors: {
-            enabled: override.purgeErrors?.enabled ?? base.purgeErrors.enabled,
-            turns: override.purgeErrors?.turns ?? base.purgeErrors.turns,
-            protectedTools: [
-                ...new Set([
-                    ...base.purgeErrors.protectedTools,
-                    ...(override.purgeErrors?.protectedTools ?? []),
-                ]),
-            ],
-        },
-    }
-}
-
-function mergeCompress(
-    base: PluginConfig["compress"],
-    override?: CompressOverride,
-): PluginConfig["compress"] {
-    if (!override) {
-        return base
-    }
-
-    return {
-        mode: override.mode ?? base.mode,
-        permission: override.permission ?? base.permission,
-        showCompression: override.showCompression ?? base.showCompression,
-        summaryBuffer: override.summaryBuffer ?? base.summaryBuffer,
-        maxContextLimit: override.maxContextLimit ?? base.maxContextLimit,
-        minContextLimit: override.minContextLimit ?? base.minContextLimit,
-        modelMaxLimits: override.modelMaxLimits ?? base.modelMaxLimits,
-        modelMinLimits: override.modelMinLimits ?? base.modelMinLimits,
-        nudgeFrequency: override.nudgeFrequency ?? base.nudgeFrequency,
-        iterationNudgeThreshold: override.iterationNudgeThreshold ?? base.iterationNudgeThreshold,
-        nudgeForce: override.nudgeForce ?? base.nudgeForce,
-        protectedTools: [...new Set([...base.protectedTools, ...(override.protectedTools ?? [])])],
-        protectTags: override.protectTags ?? base.protectTags,
-        protectUserMessages: override.protectUserMessages ?? base.protectUserMessages,
-    }
-}
-
-function mergeCommands(
-    base: PluginConfig["commands"],
-    override?: Partial<PluginConfig["commands"]>,
-): PluginConfig["commands"] {
-    if (!override) {
-        return base
-    }
-
-    return {
-        enabled: override.enabled ?? base.enabled,
-        protectedTools: [...new Set([...base.protectedTools, ...(override.protectedTools ?? [])])],
-    }
-}
-
-function mergeManualMode(
-    base: PluginConfig["manualMode"],
-    override?: Partial<PluginConfig["manualMode"]>,
-): PluginConfig["manualMode"] {
-    if (override === undefined) return base
-
-    return {
-        enabled: override.enabled ?? base.enabled,
-        automaticStrategies: override.automaticStrategies ?? base.automaticStrategies,
-    }
-}
-
-function mergeExperimental(
-    base: PluginConfig["experimental"],
-    override?: Partial<PluginConfig["experimental"]>,
-): PluginConfig["experimental"] {
-    if (override === undefined) return base
-
-    return {
-        allowSubAgents: override.allowSubAgents ?? base.allowSubAgents,
-        customPrompts: override.customPrompts ?? base.customPrompts,
-    }
-}
-
-function deepCloneConfig(config: PluginConfig): PluginConfig {
-    return {
-        ...config,
-        commands: {
-            enabled: config.commands.enabled,
-            protectedTools: [...config.commands.protectedTools],
-        },
-        manualMode: {
-            enabled: config.manualMode.enabled,
-            automaticStrategies: config.manualMode.automaticStrategies,
-        },
-        turnProtection: { ...config.turnProtection },
-        experimental: { ...config.experimental },
-        protectedFilePatterns: [...config.protectedFilePatterns],
-        compress: {
-            ...config.compress,
-            modelMaxLimits: { ...config.compress.modelMaxLimits },
-            modelMinLimits: { ...config.compress.modelMinLimits },
-            protectedTools: [...config.compress.protectedTools],
-        },
-        strategies: {
-            deduplication: {
-                ...config.strategies.deduplication,
-                protectedTools: [...config.strategies.deduplication.protectedTools],
-            },
-            purgeErrors: {
-                ...config.strategies.purgeErrors,
-                protectedTools: [...config.strategies.purgeErrors.protectedTools],
-            },
-        },
-    }
-}
-
-function mergeLayer(config: PluginConfig, data: Record<string, any>): PluginConfig {
-    return {
-        enabled: data.enabled ?? config.enabled,
-        autoUpdate: data.autoUpdate ?? config.autoUpdate,
-        debug: data.debug ?? config.debug,
-        pruneNotification: data.pruneNotification ?? config.pruneNotification,
-        pruneNotificationType: data.pruneNotificationType ?? config.pruneNotificationType,
-        commands: mergeCommands(config.commands, data.commands as any),
-        manualMode: mergeManualMode(config.manualMode, data.manualMode as any),
-        turnProtection: {
-            enabled: data.turnProtection?.enabled ?? config.turnProtection.enabled,
-            turns: data.turnProtection?.turns ?? config.turnProtection.turns,
-        },
-        experimental: mergeExperimental(config.experimental, data.experimental as any),
-        protectedFilePatterns: [
-            ...new Set([...config.protectedFilePatterns, ...(data.protectedFilePatterns ?? [])]),
-        ],
-        compress: mergeCompress(config.compress, data.compress as CompressOverride),
-        strategies: mergeStrategies(config.strategies, data.strategies as any),
-    }
+    return merged as T
 }
 
 function scheduleParseWarning(ctx: ConfigContext, title: string, message: string): void {
@@ -977,7 +553,7 @@ function scheduleParseWarning(ctx: ConfigContext, title: string, message: string
 }
 
 export function getConfig(ctx: ConfigContext): PluginConfig {
-    let config = deepCloneConfig(defaultConfig)
+    let config = structuredClone(defaultConfig)
     const configPaths = getConfigPaths(ctx)
 
     if (!configPaths.global) {
@@ -1010,7 +586,7 @@ export function getConfig(ctx: ConfigContext): PluginConfig {
         }
 
         showConfigWarnings(ctx, layer.path, result.data, layer.isProject)
-        config = mergeLayer(config, result.data)
+        config = mergeConfigLayer(config, result.data)
     }
 
     return config

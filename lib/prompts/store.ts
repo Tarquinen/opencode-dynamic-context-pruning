@@ -6,10 +6,13 @@ import { systemPrompt } from "./system"
 import { rangePrompt } from "./compress-range"
 import { messagePrompt } from "./compress-message"
 import type { IdFormat } from "../message-ids"
-import { CONTEXT_LIMIT_NUDGE } from "./context-limit-nudge"
-import { TURN_NUDGE } from "./turn-nudge"
-import { ITERATION_NUDGE } from "./iteration-nudge"
 import { MANUAL_MODE_SYSTEM_EXTENSION, SUBAGENT_SYSTEM_EXTENSION } from "./extensions/system"
+
+// Bundled nudge prompts ship empty on purpose: they are opt-in and users supply
+// the text through the prompt override directories.
+const CONTEXT_LIMIT_NUDGE = "\n"
+const TURN_NUDGE = "\n"
+const ITERATION_NUDGE = "\n"
 
 export type PromptKey =
     | "system"
@@ -109,14 +112,7 @@ const PROMPT_DEFINITIONS: PromptDefinition[] = [
     },
 ]
 
-export const PROMPT_KEYS: PromptKey[] = [
-    "system",
-    "compress-range",
-    "compress-message",
-    "context-limit-nudge",
-    "turn-nudge",
-    "iteration-nudge",
-]
+export const PROMPT_KEYS: PromptKey[] = PROMPT_DEFINITIONS.map((definition) => definition.key)
 
 const HTML_COMMENT_REGEX = /<!--[\s\S]*?-->/g
 const LEGACY_INLINE_COMMENT_LINE_REGEX = /^[ \t]*\/\/.*?\/\/[ \t]*$/gm

@@ -1,5 +1,6 @@
 import type {
     CompressionBlock,
+    PersistedPruneMessagesState,
     PruneMessagesState,
     PrunedMessageEntry,
     SessionState,
@@ -22,15 +23,6 @@ export const isMessageCompacted = (state: SessionState, msg: WithParts): boolean
         return true
     }
     return false
-}
-
-interface PersistedPruneMessagesState {
-    byMessageId: Record<string, PrunedMessageEntry>
-    blocksById: Record<string, CompressionBlock>
-    activeBlockIds: number[]
-    activeByAnchorMessageId: Record<string, number>
-    nextBlockId: number
-    nextRunId: number
 }
 
 export function serializePruneMessagesState(
@@ -115,161 +107,108 @@ export function createPruneMessagesState(): PruneMessagesState {
     }
 }
 
+/** Guards for untrusted on-disk state. A malformed value falls back to the default. */
+const isPosInt = (value: unknown): value is number =>
+    typeof value === "number" && Number.isInteger(value) && value > 0
+
+const isNonNegNum = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0
+
+const isStr = (value: unknown): value is string => typeof value === "string"
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value)
+
+/** Filter to positive integers, order preserved, duplicates dropped. */
+const posIntArray = (value: unknown): number[] =>
+    Array.isArray(value) ? [...new Set(value.filter(isPosInt))] : []
+
+/** Filter to strings, order preserved, duplicates dropped. */
+const strArray = (value: unknown): string[] =>
+    Array.isArray(value) ? [...new Set(value.filter(isStr))] : []
+
+function deserializeBlock(blockId: number, block: CompressionBlock): CompressionBlock {
+    return {
+        blockId,
+        runId: isPosInt(block.runId) ? block.runId : blockId,
+        active: block.active === true,
+        deactivatedByUser: block.deactivatedByUser === true,
+        compressedTokens: isNonNegNum(block.compressedTokens) ? block.compressedTokens : 0,
+        summaryTokens: isNonNegNum(block.summaryTokens)
+            ? block.summaryTokens
+            : isStr(block.summary)
+              ? countTokens(block.summary)
+              : 0,
+        durationMs: isNonNegNum(block.durationMs) ? block.durationMs : 0,
+        mode: block.mode === "range" || block.mode === "message" ? block.mode : undefined,
+        topic: isStr(block.topic) ? block.topic : "",
+        batchTopic: isStr(block.batchTopic) ? block.batchTopic : (block.topic ?? ""),
+        startId: isStr(block.startId) ? block.startId : "",
+        endId: isStr(block.endId) ? block.endId : "",
+        anchorMessageId: isStr(block.anchorMessageId) ? block.anchorMessageId : "",
+        compressMessageId: isStr(block.compressMessageId) ? block.compressMessageId : "",
+        compressCallId: isStr(block.compressCallId) ? block.compressCallId : undefined,
+        includedBlockIds: posIntArray(block.includedBlockIds),
+        consumedBlockIds: posIntArray(block.consumedBlockIds),
+        parentBlockIds: posIntArray(block.parentBlockIds),
+        directMessageIds: strArray(block.directMessageIds),
+        directToolIds: strArray(block.directToolIds),
+        effectiveMessageIds: strArray(block.effectiveMessageIds),
+        effectiveToolIds: strArray(block.effectiveToolIds),
+        createdAt: typeof block.createdAt === "number" ? block.createdAt : 0,
+        deactivatedAt: typeof block.deactivatedAt === "number" ? block.deactivatedAt : undefined,
+        deactivatedByBlockId: isPosInt(block.deactivatedByBlockId)
+            ? block.deactivatedByBlockId
+            : undefined,
+        summary: isStr(block.summary) ? block.summary : "",
+    }
+}
+
 export function loadPruneMessagesState(
     persisted?: PersistedPruneMessagesState,
 ): PruneMessagesState {
     const state = createPruneMessagesState()
-    if (!persisted || typeof persisted !== "object") {
+    if (!isRecord(persisted)) {
         return state
     }
 
-    if (typeof persisted.nextBlockId === "number" && Number.isInteger(persisted.nextBlockId)) {
-        state.nextBlockId = Math.max(1, persisted.nextBlockId)
-    }
-    if (typeof persisted.nextRunId === "number" && Number.isInteger(persisted.nextRunId)) {
-        state.nextRunId = Math.max(1, persisted.nextRunId)
-    }
-
-    if (persisted.byMessageId && typeof persisted.byMessageId === "object") {
-        for (const [messageId, entry] of Object.entries(persisted.byMessageId)) {
-            if (!entry || typeof entry !== "object") {
-                continue
-            }
-
-            const tokenCount = typeof entry.tokenCount === "number" ? entry.tokenCount : 0
-            const allBlockIds = Array.isArray(entry.allBlockIds)
-                ? [
-                      ...new Set(
-                          entry.allBlockIds.filter(
-                              (id): id is number => Number.isInteger(id) && id > 0,
-                          ),
-                      ),
-                  ]
-                : []
-            const activeBlockIds = Array.isArray(entry.activeBlockIds)
-                ? [
-                      ...new Set(
-                          entry.activeBlockIds.filter(
-                              (id): id is number => Number.isInteger(id) && id > 0,
-                          ),
-                      ),
-                  ]
-                : []
-
-            state.byMessageId.set(messageId, {
-                tokenCount,
-                allBlockIds,
-                activeBlockIds,
-            })
+    for (const [messageId, entry] of Object.entries(
+        isRecord(persisted.byMessageId) ? persisted.byMessageId : {},
+    )) {
+        if (!isRecord(entry)) {
+            continue
         }
+
+        state.byMessageId.set(messageId, {
+            tokenCount: typeof entry.tokenCount === "number" ? entry.tokenCount : 0,
+            allBlockIds: posIntArray(entry.allBlockIds),
+            activeBlockIds: posIntArray(entry.activeBlockIds),
+        })
     }
 
-    if (persisted.blocksById && typeof persisted.blocksById === "object") {
-        for (const [blockIdStr, block] of Object.entries(persisted.blocksById)) {
-            const blockId = Number.parseInt(blockIdStr, 10)
-            if (!Number.isInteger(blockId) || blockId < 1 || !block || typeof block !== "object") {
-                continue
-            }
-
-            const toNumberArray = (value: unknown): number[] =>
-                Array.isArray(value)
-                    ? [
-                          ...new Set(
-                              value.filter(
-                                  (item): item is number => Number.isInteger(item) && item > 0,
-                              ),
-                          ),
-                      ]
-                    : []
-            const toStringArray = (value: unknown): string[] =>
-                Array.isArray(value)
-                    ? [...new Set(value.filter((item): item is string => typeof item === "string"))]
-                    : []
-
-            state.blocksById.set(blockId, {
-                blockId,
-                runId:
-                    typeof block.runId === "number" &&
-                    Number.isInteger(block.runId) &&
-                    block.runId > 0
-                        ? block.runId
-                        : blockId,
-                active: block.active === true,
-                deactivatedByUser: block.deactivatedByUser === true,
-                compressedTokens:
-                    typeof block.compressedTokens === "number" &&
-                    Number.isFinite(block.compressedTokens)
-                        ? Math.max(0, block.compressedTokens)
-                        : 0,
-                summaryTokens:
-                    typeof block.summaryTokens === "number" && Number.isFinite(block.summaryTokens)
-                        ? Math.max(0, block.summaryTokens)
-                        : typeof block.summary === "string"
-                          ? countTokens(block.summary)
-                          : 0,
-                durationMs:
-                    typeof block.durationMs === "number" && Number.isFinite(block.durationMs)
-                        ? Math.max(0, block.durationMs)
-                        : 0,
-                mode: block.mode === "range" || block.mode === "message" ? block.mode : undefined,
-                topic: typeof block.topic === "string" ? block.topic : "",
-                batchTopic:
-                    typeof block.batchTopic === "string"
-                        ? block.batchTopic
-                        : typeof block.topic === "string"
-                          ? block.topic
-                          : "",
-                startId: typeof block.startId === "string" ? block.startId : "",
-                endId: typeof block.endId === "string" ? block.endId : "",
-                anchorMessageId:
-                    typeof block.anchorMessageId === "string" ? block.anchorMessageId : "",
-                compressMessageId:
-                    typeof block.compressMessageId === "string" ? block.compressMessageId : "",
-                compressCallId:
-                    typeof block.compressCallId === "string" ? block.compressCallId : undefined,
-                includedBlockIds: toNumberArray(block.includedBlockIds),
-                consumedBlockIds: toNumberArray(block.consumedBlockIds),
-                parentBlockIds: toNumberArray(block.parentBlockIds),
-                directMessageIds: toStringArray(block.directMessageIds),
-                directToolIds: toStringArray(block.directToolIds),
-                effectiveMessageIds: toStringArray(block.effectiveMessageIds),
-                effectiveToolIds: toStringArray(block.effectiveToolIds),
-                createdAt: typeof block.createdAt === "number" ? block.createdAt : 0,
-                deactivatedAt:
-                    typeof block.deactivatedAt === "number" ? block.deactivatedAt : undefined,
-                deactivatedByBlockId:
-                    typeof block.deactivatedByBlockId === "number" &&
-                    Number.isInteger(block.deactivatedByBlockId)
-                        ? block.deactivatedByBlockId
-                        : undefined,
-                summary: typeof block.summary === "string" ? block.summary : "",
-            })
+    for (const [blockIdStr, block] of Object.entries(
+        isRecord(persisted.blocksById) ? persisted.blocksById : {},
+    )) {
+        const blockId = Number.parseInt(blockIdStr, 10)
+        if (!isPosInt(blockId) || !isRecord(block)) {
+            continue
         }
+
+        state.blocksById.set(blockId, deserializeBlock(blockId, block as CompressionBlock))
     }
 
-    if (Array.isArray(persisted.activeBlockIds)) {
-        for (const blockId of persisted.activeBlockIds) {
-            if (!Number.isInteger(blockId) || blockId < 1) {
-                continue
-            }
-            state.activeBlockIds.add(blockId)
+    for (const [anchorMessageId, blockId] of Object.entries(
+        isRecord(persisted.activeByAnchorMessageId) ? persisted.activeByAnchorMessageId : {},
+    )) {
+        if (!isPosInt(blockId)) {
+            continue
         }
+        state.activeByAnchorMessageId.set(anchorMessageId, blockId)
     }
 
-    if (
-        persisted.activeByAnchorMessageId &&
-        typeof persisted.activeByAnchorMessageId === "object"
-    ) {
-        for (const [anchorMessageId, blockId] of Object.entries(
-            persisted.activeByAnchorMessageId,
-        )) {
-            if (typeof blockId !== "number" || !Number.isInteger(blockId) || blockId < 1) {
-                continue
-            }
-            state.activeByAnchorMessageId.set(anchorMessageId, blockId)
-        }
-    }
-
+    // The block list is authoritative: a block marked active repopulates both indexes.
+    // Serialization writes those indexes from this same source, so the persisted
+    // copies of them are redundant.
     for (const [blockId, block] of state.blocksById) {
         if (block.active) {
             state.activeBlockIds.add(blockId)

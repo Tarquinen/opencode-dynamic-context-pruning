@@ -92,6 +92,16 @@ export interface Nudges {
     iterationNudgeAnchors: Set<string>
 }
 
+/** Prune state as stored on disk */
+export interface PersistedPruneMessagesState {
+    byMessageId: Record<string, PrunedMessageEntry>
+    blocksById: Record<string, CompressionBlock>
+    activeBlockIds: number[]
+    activeByAnchorMessageId: Record<string, number>
+    nextBlockId: number
+    nextRunId: number
+}
+
 export interface SessionState {
     idFormat: IdFormat
     sessionId: string | null

@@ -33,11 +33,11 @@ import { analyzeContextTokens } from "../commands/context"
 import { buildStatsReport } from "../commands/stats"
 import { rpc } from "./rpc"
 
-// Extension point for future model-invisible V2 reports. Never use synthetic()
-// here: its text would enter the model's context, unlike V1 ignored messages.
-export async function report(logger: Logger, text: string, sessionID?: string) {
+// The shim below stands in for a V1 SDK client so the shared V1 modules can run
+// unchanged. Model-invisible reports go to the log: V2 `synthetic()` would put
+// their text into the model's context, unlike V1 ignored messages.
+const reportToLog = (logger: Logger, text: string, sessionID?: string) =>
     logger.debug("V2 report (display pending)", { sessionID, text })
-}
 
 export async function setup(ctx: Plugin.Context) {
     const warnings = {
@@ -107,11 +107,15 @@ export async function setup(ctx: Plugin.Context) {
                 path: { id: string }
                 body: { parts: Array<{ text: string }> }
             }) =>
-                report(logger, input.body.parts.map((part) => part.text).join("\n"), input.path.id),
+                reportToLog(
+                    logger,
+                    input.body.parts.map((part) => part.text).join("\n"),
+                    input.path.id,
+                ),
         },
         tui: {
             showToast: async (input: { body: { message: string } }) =>
-                report(logger, input.body.message),
+                reportToLog(logger, input.body.message),
         },
     }
 
