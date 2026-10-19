@@ -4,10 +4,12 @@ import type { WithParts } from "../lib/state"
 import {
     COMPACTED_TOOL_OUTPUT_PLACEHOLDER,
     countAllMessageTokens,
+    countTokens,
     countToolTokens,
     estimateTokensBatch,
     extractCompletedToolOutput,
     extractToolContent,
+    resetTokenCountingForTests,
 } from "../lib/token-utils"
 
 function buildToolMessage(part: Record<string, any>): WithParts {
@@ -171,4 +173,97 @@ test("counting uses the compacted tool placeholder for completed outputs", () =>
 
     assert.equal(extractCompletedToolOutput(part), COMPACTED_TOOL_OUTPUT_PLACEHOLDER)
     assertCounted(part, [JSON.stringify(input), COMPACTED_TOOL_OUTPUT_PLACEHOLDER])
+})
+
+// --- shared tokenizer, bounded counting and caching (upstream #638/#659) ---
+
+async function referenceTokenizer() {
+    const tokenizer = await import("@anthropic-ai/tokenizer")
+    return ((tokenizer as any).countTokens ?? (tokenizer as any).default?.countTokens) as (
+        text: string,
+    ) => number
+}
+
+function measure(fn: () => number): { ms: number; tokens: number } {
+    const start = performance.now()
+    const tokens = fn()
+    return { ms: performance.now() - start, tokens }
+}
+
+function repeatTo(chars: number, unit: string): string {
+    return unit.repeat(Math.ceil(chars / unit.length)).slice(0, chars)
+}
+
+test("countTokens matches the reference tokenizer and reuses one tokenizer", async () => {
+    const reference = await referenceTokenizer()
+    const samples = [
+        "hello world",
+        "Crème brûlée — ﬁ ligature ① and emoji 🚀",
+        JSON.stringify({ path: "src/index.ts", edits: [{ line: 1, text: "const x = 1" }] }),
+        "x".repeat(1000),
+        "<|endoftext|> special tokens are counted, not rejected",
+    ]
+    for (const sample of samples) assert.equal(countTokens(sample), reference(sample))
+
+    // Building a tokenizer per call took ~70 ms; 200 calls with a shared one take a few ms.
+    resetTokenCountingForTests()
+    const unit = "tool output with words, punctuation and identifiers. "
+    const start = performance.now()
+    for (let index = 0; index < 200; index++) {
+        assert.ok(countTokens(`${index} ${unit}`) > 0)
+    }
+    const elapsed = performance.now() - start
+    assert.ok(elapsed < 6_000, `200 counts took ${elapsed.toFixed(0)} ms; is the tokenizer shared?`)
+})
+
+test("countTokens bounds the cost of huge and degenerate inputs", () => {
+    const realistic = repeatTo(4 * 1024 * 1024, "counts must stay bounded on huge inputs. ")
+    const realisticRun = measure(() => countTokens(realistic))
+    assert.ok(
+        realisticRun.ms < 1_000,
+        `counting 4 MB took ${realisticRun.ms.toFixed(0)} ms; exact counting is unbounded`,
+    )
+
+    const degenerate = "x".repeat(2 * 1024 * 1024)
+    const degenerateRun = measure(() => countTokens(degenerate))
+    assert.ok(
+        degenerateRun.ms < 1_000,
+        `counting a 2 MB single-character run took ${degenerateRun.ms.toFixed(0)} ms`,
+    )
+})
+
+test("countTokens caches exact counts", () => {
+    resetTokenCountingForTests()
+    const text = repeatTo(7000, "cached content with words, punctuation and identifiers. ")
+    const first = measure(() => countTokens(text))
+    assert.ok(first.tokens > 0)
+
+    const start = performance.now()
+    for (let index = 0; index < 500; index++) assert.equal(countTokens(text), first.tokens)
+    const elapsed = performance.now() - start
+    assert.ok(elapsed < 1_000, `500 cached counts took ${elapsed.toFixed(0)} ms`)
+})
+
+test("sampled estimates stay close to exact counts above the limit", async () => {
+    const reference = await referenceTokenizer()
+    process.env.DCP_TOKEN_COUNT_MAX_EXACT_CHARS = "0"
+    try {
+        const units = [
+            "memory context pruning keeps summaries technical and dense. ",
+            '{"tool":"read","input":{"filePath":"/tmp/app.log","limit":2000}} ',
+            "def compress(block)\n  summary_tokens = count(block.summary)\nend\n",
+        ]
+        for (const unit of units) {
+            const text = repeatTo(64 * 1024, unit)
+            const exact = reference(text)
+            const estimated = countTokens(text)
+            const error = Math.abs(estimated - exact) / exact
+            assert.ok(
+                error < 0.1,
+                `sampled estimate off by ${(error * 100).toFixed(1)}% for "${unit.slice(0, 24)}"`,
+            )
+        }
+    } finally {
+        delete process.env.DCP_TOKEN_COUNT_MAX_EXACT_CHARS
+    }
 })

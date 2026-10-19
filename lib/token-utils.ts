@@ -2,9 +2,94 @@ import { SessionState, WithParts } from "./state"
 import { AssistantMessage, UserMessage } from "@opencode-ai/sdk/v2"
 import { Logger } from "./logger"
 import * as _anthropicTokenizer from "@anthropic-ai/tokenizer"
-const anthropicCountTokens = (_anthropicTokenizer.countTokens ??
-    (_anthropicTokenizer as any).default?.countTokens) as typeof _anthropicTokenizer.countTokens
 import { getLastUserMessage } from "./messages/query"
+
+const anthropicGetTokenizer = (_anthropicTokenizer.getTokenizer ??
+    (_anthropicTokenizer as any).default?.getTokenizer) as typeof _anthropicTokenizer.getTokenizer
+
+// The package's countTokens() builds and frees a WASM tokenizer on every call (~70 ms each),
+// while an encode() on a reused tokenizer costs a fraction of a millisecond (upstream #638/#639).
+// Build it once and share it. Never free() the shared instance.
+let anthropicTokenizer: ReturnType<typeof anthropicGetTokenizer> | undefined
+
+function tokenizeExact(text: string): number {
+    anthropicTokenizer ??= anthropicGetTokenizer()
+    return anthropicTokenizer.encode(text.normalize("NFKC"), "all").length
+}
+
+// encode() runs synchronously on the host's event loop and its cost is super-linear on long
+// runs without token boundaries: a single huge input could block OpenCode for seconds
+// (upstream #659). Count exactly up to this many characters and extrapolate from samples above
+// it, so one call can never block the host. Override with DCP_TOKEN_COUNT_MAX_EXACT_CHARS
+// (0 samples every text; a huge value forces exact counting).
+const DEFAULT_MAX_EXACT_CHARS = 16 * 1024
+const SAMPLE_CHARS = 2048
+
+function maxExactChars(): number {
+    const raw = process.env.DCP_TOKEN_COUNT_MAX_EXACT_CHARS
+    if (raw === undefined) return DEFAULT_MAX_EXACT_CHARS
+    const parsed = Number.parseInt(raw, 10)
+    if (!Number.isFinite(parsed) || parsed < 0) return DEFAULT_MAX_EXACT_CHARS
+    return Math.min(parsed, Number.MAX_SAFE_INTEGER)
+}
+
+// A long run of one repeated character has no token boundaries for the encoder, and its cost
+// grows super-linearly: 10k characters can already block the host for hundreds of milliseconds
+// (upstream #659). Treat such inputs as huge and sample them too. Up to DEGENERATE_RUN_SAFE_CHARS
+// a repeated run is cheap enough to count exactly (measured ~20 ms at 4k characters), and the
+// run scan is bounded by the exact-count limit with cheap charCodeAt comparisons.
+const MAX_CHAR_RUN = 512
+const DEGENERATE_RUN_SAFE_CHARS = 4 * 1024
+
+function hasLongCharRun(text: string): boolean {
+    let run = 1
+    for (let i = 1; i < text.length; i++) {
+        if (text.charCodeAt(i) === text.charCodeAt(i - 1)) {
+            run++
+            if (run >= MAX_CHAR_RUN) return true
+        } else {
+            run = 1
+        }
+    }
+    return false
+}
+
+// The same summaries, system prompt and tool outputs are re-counted on every chat-messages
+// transform (and again after tool-cache evictions), so memoize exact counts. Keys are capped by
+// size and total bytes to keep the cache bounded; sampled counts are cheap and are not cached.
+const CACHE_MAX_ENTRIES = 1024
+const CACHE_MAX_CHARS = 4 * 1024 * 1024
+const exactCountCache = new Map<string, number>()
+let exactCountCacheChars = 0
+
+function trimExactCountCache(): void {
+    while (exactCountCache.size > CACHE_MAX_ENTRIES || exactCountCacheChars > CACHE_MAX_CHARS) {
+        const oldest = exactCountCache.keys().next().value
+        if (oldest === undefined) return
+        exactCountCacheChars -= oldest.length
+        exactCountCache.delete(oldest)
+    }
+}
+
+/** Clears the shared tokenizer and the count cache. Test helper only. */
+export function resetTokenCountingForTests(): void {
+    anthropicTokenizer = undefined
+    exactCountCache.clear()
+    exactCountCacheChars = 0
+}
+
+function estimateTokensFromSamples(text: string): number {
+    // Disjoint windows: head, middle and tail, each at most SAMPLE_CHARS and at least one third
+    // of the input, so the sampled density is representative and the sampled area is known.
+    const window = Math.min(SAMPLE_CHARS, Math.floor(text.length / 3))
+    if (window < 16) return tokenizeExact(text)
+    const middleStart = (text.length - window) >> 1
+    const head = tokenizeExact(text.slice(0, window))
+    const middle = tokenizeExact(text.slice(middleStart, middleStart + window))
+    const tail = tokenizeExact(text.slice(-window))
+    const perChar = (head + middle + tail) / (3 * window)
+    return Math.max(1, Math.round(perChar * text.length))
+}
 
 export function getCurrentTokenUsage(state: SessionState, messages: WithParts[]): number {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -68,16 +153,46 @@ export function getCurrentParams(
 
 export function countTokens(text: string): number {
     if (!text) return 0
+
+    const cached = exactCountCache.get(text)
+    if (cached !== undefined) {
+        exactCountCache.delete(text)
+        exactCountCache.set(text, cached)
+        return cached
+    }
+
+    const limit = maxExactChars()
+    const exact =
+        text.length <= limit && (text.length <= DEGENERATE_RUN_SAFE_CHARS || !hasLongCharRun(text))
+
+    let tokens: number
     try {
-        return anthropicCountTokens(text)
+        tokens = exact ? tokenizeExact(text) : estimateTokensFromSamples(text)
     } catch {
+        anthropicTokenizer = undefined
         return Math.round(text.length / 4)
     }
+
+    if (exact) {
+        exactCountCache.set(text, tokens)
+        exactCountCacheChars += text.length
+        trimExactCountCache()
+    }
+
+    if (process.env.DCP_TOKEN_DEBUG === "1") {
+        process.stderr.write(
+            `[dcp-token] chars=${text.length} tokens=${tokens} path=${exact ? "exact" : "sampled"}\n`,
+        )
+    }
+
+    return tokens
 }
 
 export function estimateTokensBatch(texts: string[]): number {
     if (texts.length === 0) return 0
-    return countTokens(texts.join(" "))
+    let total = 0
+    for (const text of texts) total += countTokens(text)
+    return total
 }
 
 export const COMPACTED_TOOL_OUTPUT_PLACEHOLDER = "[Old tool result content cleared]"
