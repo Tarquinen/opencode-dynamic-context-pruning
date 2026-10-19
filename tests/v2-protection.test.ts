@@ -49,7 +49,7 @@ test("Code Mode protections survive caching, strategy selection, and compression
             },
         ],
     })) as unknown as WithParts[]
-    syncToolCache(state, config, logger, messages)
+    await syncToolCache(state, config, logger, messages)
     state.toolIdList = ["first", "second", "failed"]
     deduplicate(state, logger, config, messages)
     purgeErrors(state, logger, config, messages)
@@ -57,7 +57,7 @@ test("Code Mode protections survive caching, strategy selection, and compression
 
     const context = buildSearchContext(state, messages)
     const boundary = { kind: "message" as const, rawIndex: 0, messageId: "first" }
-    const selection = resolveSelection(context, boundary, boundary)
+    const selection = await resolveSelection(context, boundary, boundary)
     const summary = await appendProtectedTools(
         {},
         state,

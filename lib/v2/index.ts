@@ -183,7 +183,7 @@ export async function setup(ctx: Plugin.Context) {
                 }
                 if (state.compressPermission === "deny") delete event.tools.compress
                 state.modelContextLimit = limits.get(`${event.model.providerID}/${event.model.id}`)
-                state.systemPromptTokens = countTokens(
+                state.systemPromptTokens = await countTokens(
                     event.system.map((part) => part.text).join("\n"),
                 )
                 const view = project(event.messages, entries, {
@@ -195,7 +195,7 @@ export async function setup(ctx: Plugin.Context) {
                 assignMessageRefs(state, view.messages)
                 // Compaction may select only a prefix; block origins can be in the retained tail.
                 syncCompressionBlocks(state, logger, messages)
-                syncToolCache(state, config, logger, view.messages)
+                await syncToolCache(state, config, logger, view.messages)
                 buildToolIdList(state, view.messages)
                 prune(state, logger, config, view.messages, view.summaryBase)
                 await injectExtendedSubAgentResults(
@@ -205,7 +205,7 @@ export async function setup(ctx: Plugin.Context) {
                     view.messages,
                     config.experimental.allowSubAgents,
                 )
-                const priorities = buildPriorityMap(config, state, view.messages)
+                const priorities = await buildPriorityMap(config, state, view.messages)
                 prompts.reload()
                 injectCompressNudges(
                     state,
@@ -351,7 +351,7 @@ export async function setup(ctx: Plugin.Context) {
                                   "Permission 'ask' is not supported by the V2 plugin API yet.",
                           }
                         : {}),
-                    context: analyzeContextTokens(state, messages),
+                    context: await analyzeContextTokens(state, messages),
                     stats: await buildStatsReport(state, logger),
                 }
             }),

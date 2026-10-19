@@ -7,7 +7,7 @@ import {
     type HostPermissionSnapshot,
 } from "./lib/host-permissions"
 import { Logger } from "./lib/logger"
-import { createSessionState } from "./lib/state"
+import { createSessionState, exclusive } from "./lib/state"
 import { PromptStore } from "./lib/prompts/store"
 import {
     createChatMessageTransformHandler,
@@ -54,30 +54,36 @@ const server: Plugin = (async (ctx) => {
         prompts,
     }
 
+    // This server shares one state across sessions: handlers that await while mutating it
+    // (token counts, restoration, commands, compression) take turns via exclusive().
+    const transformMessages = createChatMessageTransformHandler(
+        ctx.client,
+        state,
+        logger,
+        config,
+        prompts,
+        hostPermissions,
+    )
+    const executeCommand = createCommandExecuteHandler(
+        ctx.client,
+        state,
+        logger,
+        config,
+        ctx.directory,
+        hostPermissions,
+    )
+
+    const transformSystem = createSystemPromptHandler(state, logger, config, prompts)
+
     return {
-        "experimental.chat.system.transform": createSystemPromptHandler(
-            state,
-            logger,
-            config,
-            prompts,
-        ),
-        "experimental.chat.messages.transform": createChatMessageTransformHandler(
-            ctx.client,
-            state,
-            logger,
-            config,
-            prompts,
-            hostPermissions,
-        ) as any,
+        // Shares state (e.g. modelContextLimit) with awaited transforms, so it takes the same lock.
+        "experimental.chat.system.transform": (input, output) =>
+            exclusive(state, () => transformSystem(input, output)),
+        "experimental.chat.messages.transform": ((input: any, output: any) =>
+            exclusive(state, () => transformMessages(input, output))) as any,
         "experimental.text.complete": createTextCompleteHandler(),
-        "command.execute.before": createCommandExecuteHandler(
-            ctx.client,
-            state,
-            logger,
-            config,
-            ctx.directory,
-            hostPermissions,
-        ),
+        "command.execute.before": (input, output) =>
+            exclusive(state, () => executeCommand(input, output)),
         event: createEventHandler(state, logger),
         tool: {
             ...(config.compress.permission !== "deny" && {

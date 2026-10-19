@@ -112,7 +112,7 @@ test("V2 IDs are unpadded, distinct from blocks, and survive state resets", () =
     assert.equal(parseBoundaryId("@4@"), null)
 })
 
-test("V2 cleans echoed IDs and priorities before injecting correct protected/message tags", () => {
+test("V2 cleans echoed IDs and priorities before injecting correct protected/message tags", async () => {
     const state = createSessionState("compact")
     const raw = messages("ses_cleanup")
     raw[1]!.parts = [
@@ -130,7 +130,7 @@ test("V2 cleans echoed IDs and priorities before injecting correct protected/mes
     const settings = config("message")
     settings.compress.protectUserMessages = true
     assignMessageRefs(state, raw)
-    injectMessageIds(state, settings, raw, buildPriorityMap(settings, state, raw))
+    injectMessageIds(state, settings, raw, await buildPriorityMap(settings, state, raw))
     assert.match((raw[0]!.parts[0] as any).text, /@blocked@$/)
     assert.match((raw[1]!.parts[1] as any).state.output, /@2@ \[low\]$/)
     assert.doesNotMatch(JSON.stringify(raw), /dcp-message-id/)

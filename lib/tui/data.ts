@@ -50,7 +50,7 @@ export async function buildSessionState(
         }
 
         state.prune.tools = loadPruneMap(persisted.prune.tools)
-        state.prune.messages = loadPruneMessagesState(persisted.prune.messages)
+        state.prune.messages = await loadPruneMessagesState(persisted.prune.messages)
         state.nudges.contextLimitAnchors = new Set(persisted.nudges.contextLimitAnchors || [])
         state.nudges.turnNudgeAnchors = new Set(persisted.nudges.turnNudgeAnchors || [])
         state.nudges.iterationNudgeAnchors = new Set(persisted.nudges.iterationNudgeAnchors || [])

@@ -131,10 +131,10 @@ export function createChatMessageTransformHandler(
         }
 
         stripHallucinations(output.messages)
-        cacheSystemPromptTokens(state, output.messages)
+        await cacheSystemPromptTokens(state, output.messages)
         assignMessageRefs(state, output.messages)
         syncCompressionBlocks(state, logger, output.messages)
-        syncToolCache(state, config, logger, output.messages)
+        await syncToolCache(state, config, logger, output.messages)
         buildToolIdList(state, output.messages)
         prune(state, logger, config, output.messages)
         await injectExtendedSubAgentResults(
@@ -144,7 +144,7 @@ export function createChatMessageTransformHandler(
             output.messages,
             config.experimental.allowSubAgents,
         )
-        const compressionPriorities = buildPriorityMap(config, state, output.messages)
+        const compressionPriorities = await buildPriorityMap(config, state, output.messages)
         prompts.reload()
         injectCompressNudges(
             state,

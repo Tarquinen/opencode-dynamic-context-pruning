@@ -70,7 +70,10 @@ interface TokenBreakdown {
     total: number
 }
 
-export function analyzeContextTokens(state: SessionState, messages: WithParts[]): TokenBreakdown {
+export async function analyzeContextTokens(
+    state: SessionState,
+    messages: WithParts[],
+): Promise<TokenBreakdown> {
     const breakdown: TokenBreakdown = {
         system: 0,
         user: 0,
@@ -206,10 +209,10 @@ export function analyzeContextTokens(state: SessionState, messages: WithParts[])
     breakdown.prunedToolCount = prunedToolIds.size
     breakdown.prunedMessageCount = prunedMessageCount
 
-    const firstUserTokens = countTokens(firstUserText)
-    breakdown.user = countTokens(userTextParts.join("\n"))
-    const toolInputTokens = countTokens(toolInputParts.join("\n"))
-    const toolOutputTokens = countTokens(toolOutputParts.join("\n"))
+    const firstUserTokens = await countTokens(firstUserText)
+    breakdown.user = await countTokens(userTextParts.join("\n"))
+    const toolInputTokens = await countTokens(toolInputParts.join("\n"))
+    const toolOutputTokens = await countTokens(toolOutputParts.join("\n"))
 
     if (firstAssistant) {
         const firstInput =
@@ -296,7 +299,7 @@ export function formatContextMessage(breakdown: TokenBreakdown): string {
 export async function handleContextCommand(ctx: ContextCommandContext): Promise<void> {
     const { client, state, logger, sessionId, messages } = ctx
 
-    const breakdown = analyzeContextTokens(state, messages)
+    const breakdown = await analyzeContextTokens(state, messages)
 
     const message = formatContextMessage(breakdown)
 

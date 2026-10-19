@@ -190,7 +190,10 @@ export function formatProgressBar(
     return `│${bar.join("")}│`
 }
 
-export function cacheSystemPromptTokens(state: SessionState, messages: WithParts[]): void {
+export async function cacheSystemPromptTokens(
+    state: SessionState,
+    messages: WithParts[],
+): Promise<void> {
     let firstInputTokens = 0
     for (const msg of messages) {
         if (msg.info.role !== "assistant") {
@@ -225,7 +228,7 @@ export function cacheSystemPromptTokens(state: SessionState, messages: WithParts
         break
     }
 
-    const estimatedSystemTokens = Math.max(0, firstInputTokens - countTokens(firstUserText))
+    const estimatedSystemTokens = Math.max(0, firstInputTokens - (await countTokens(firstUserText)))
     state.systemPromptTokens = estimatedSystemTokens > 0 ? estimatedSystemTokens : undefined
 }
 

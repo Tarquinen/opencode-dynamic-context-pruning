@@ -19,6 +19,10 @@ const requiredRepoFiles = [
     "dist/tui.d.ts",
     "tui.tsx",
     "server.js",
+    "lib/tokenizer/tokenizer-child.js",
+    "lib/tokenizer/tokenizer-worker.js",
+    "lib/tokenizer/tokenizer-runtime.bunfig.toml",
+    "lib/tokenizer/tsconfig.json",
     "README.md",
     "LICENSE",
 ]
@@ -30,6 +34,10 @@ const requiredTarballFiles = [
     "dist/tui.d.ts",
     "tui.tsx",
     "server.js",
+    "lib/tokenizer/tokenizer-child.js",
+    "lib/tokenizer/tokenizer-worker.js",
+    "lib/tokenizer/tokenizer-runtime.bunfig.toml",
+    "lib/tokenizer/tsconfig.json",
     "README.md",
     "LICENSE",
 ]
@@ -177,7 +185,13 @@ function packageLooksCommonJs(pkg) {
 }
 
 function validateRuntimeImportGraph() {
-    const pending = [path.join(root, "index.ts"), path.join(root, "tui.tsx")]
+    // The tokenizer sidecars are spawned, not imported, so list them explicitly.
+    const pending = [
+        path.join(root, "index.ts"),
+        path.join(root, "tui.tsx"),
+        path.join(root, "lib/tokenizer/tokenizer-child.js"),
+        path.join(root, "lib/tokenizer/tokenizer-worker.js"),
+    ]
     const seen = new Set()
 
     while (pending.length > 0) {

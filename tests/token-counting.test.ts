@@ -35,16 +35,16 @@ function buildToolPart(tool: string, state: Record<string, any>) {
     }
 }
 
-function assertCounted(part: Record<string, any>, expectedContents: string[]) {
+async function assertCounted(part: Record<string, any>, expectedContents: string[]) {
     assert.deepEqual(extractToolContent(part), expectedContents)
-    assert.equal(countToolTokens(part), estimateTokensBatch(expectedContents))
+    assert.equal(await countToolTokens(part), await estimateTokensBatch(expectedContents))
     assert.equal(
-        countAllMessageTokens(buildToolMessage(part)),
-        estimateTokensBatch(expectedContents),
+        await countAllMessageTokens(buildToolMessage(part)),
+        await estimateTokensBatch(expectedContents),
     )
 }
 
-test("counting includes input for large built-in tool calls", () => {
+test("counting includes input for large built-in tool calls", async () => {
     const cases = [
         {
             tool: "compress",
@@ -138,11 +138,11 @@ test("counting includes input for large built-in tool calls", () => {
             typeof testCase.output === "string" ? testCase.output : JSON.stringify(testCase.output),
         ]
 
-        assertCounted(part, expectedContents)
+        await assertCounted(part, expectedContents)
     }
 })
 
-test("counting includes input for errored custom tools", () => {
+test("counting includes input for errored custom tools", async () => {
     const customInput = {
         payload: "some large custom tool payload",
         options: { mode: "deep" },
@@ -153,10 +153,10 @@ test("counting includes input for errored custom tools", () => {
         error: "Tool execution failed",
     })
 
-    assertCounted(part, [JSON.stringify(customInput), "Tool execution failed"])
+    await assertCounted(part, [JSON.stringify(customInput), "Tool execution failed"])
 })
 
-test("counting uses the compacted tool placeholder for completed outputs", () => {
+test("counting uses the compacted tool placeholder for completed outputs", async () => {
     const input = { filePath: "/tmp/large.log" }
     const part = buildToolPart("read", {
         status: "completed",
@@ -170,5 +170,5 @@ test("counting uses the compacted tool placeholder for completed outputs", () =>
     })
 
     assert.equal(extractCompletedToolOutput(part), COMPACTED_TOOL_OUTPUT_PLACEHOLDER)
-    assertCounted(part, [JSON.stringify(input), COMPACTED_TOOL_OUTPUT_PLACEHOLDER])
+    await assertCounted(part, [JSON.stringify(input), COMPACTED_TOOL_OUTPUT_PLACEHOLDER])
 })

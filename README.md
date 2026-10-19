@@ -53,6 +53,10 @@ Identifies repeated tool calls (same tool, same arguments) and keeps only the mo
 
 Prunes inputs from errored tool calls after a configurable number of turns. Error messages are preserved; only the potentially large input content is removed. Recalculated on compress tool use.
 
+### Token Counting
+
+Token counts use the Anthropic tokenizer in a separate child process (`lib/tokenizer/`), so a slow encode cannot block OpenCode. Each count has a hard deadline (5 seconds by default); if it is exceeded, the child is killed and the count fails with an error rather than an estimate. After a failed child is confirmed stopped, later counts may start a fresh child; if it cannot be stopped, counting stays unavailable. The child receives a minimal environment, ignores any surrounding project's Bun and TypeScript configuration, and exits with OpenCode or after being idle. Requests are not cancelled early: a count, or an operation needing several counts, started for an interrupted request may keep one CPU core busy until it completes or reaches its deadline.
+
 ## Configuration
 
 DCP uses its own config file, searched in order:

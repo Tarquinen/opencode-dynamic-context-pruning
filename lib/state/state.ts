@@ -14,6 +14,7 @@ import {
 } from "./utils"
 import { getLastUserMessage } from "../messages/query"
 import type { IdFormat } from "../message-ids"
+import { TokenCountError } from "../token-counter"
 
 export const checkSession = async (
     client: any,
@@ -41,6 +42,8 @@ export const checkSession = async (
                 manualModeDefault,
             )
         } catch (err: any) {
+            // Initialisation was rolled back; a counting failure must reach the caller.
+            if (err instanceof TokenCountError) throw err
             logger.error("Failed to initialize session state", { error: err.message })
         }
     }
@@ -105,6 +108,7 @@ export function createSessionState(idFormat: IdFormat = "xml"): SessionState {
 }
 
 export function resetSessionState(state: SessionState): void {
+    owners.set(state, {})
     state.sessionId = null
     state.isSubAgent = false
     state.manualMode = false
@@ -137,6 +141,20 @@ export function resetSessionState(state: SessionState): void {
     state.systemPromptTokens = undefined
 }
 
+// Replaced whenever a state is reset, so a slower initialisation can tell that it lost ownership.
+const owners = new WeakMap<SessionState, object>()
+const locks = new WeakMap<SessionState, Promise<unknown>>()
+
+/**
+ * Runs operations that await while mutating one shared state one at a time. The legacy server
+ * shares a single state across sessions, so awaited token counts must not interleave there.
+ */
+export function exclusive<T>(state: SessionState, operation: () => Promise<T>): Promise<T> {
+    const pending = (locks.get(state) ?? Promise.resolve()).catch(() => {}).then(operation)
+    locks.set(state, pending)
+    return pending
+}
+
 export async function ensureSessionInitialized(
     client: any,
     state: SessionState,
@@ -152,11 +170,22 @@ export async function ensureSessionInitialized(
     // logger.info("session ID = " + sessionId)
     // logger.info("Initializing session state", { sessionId: sessionId })
 
+    // Everything awaited is staged first; the state changes only in the synchronous commit
+    // below, so a failure leaves it untouched and a late result never replaces newer state.
+    const owner = owners.get(state)
+    const isSubAgent = await isSubAgentSession(client, sessionId)
+    const persisted = await loadSessionState(sessionId, logger)
+    const pruneMessages = persisted && (await loadPruneMessagesState(persisted.prune.messages))
+    if (state.sessionId === sessionId) {
+        return
+    }
+    if (owners.get(state) !== owner) {
+        throw new Error(`DCP session state changed while initialising ${sessionId}`)
+    }
+
     resetSessionState(state)
     state.manualMode = manualModeEnabled ? "active" : false
     state.sessionId = sessionId
-
-    const isSubAgent = await isSubAgentSession(client, sessionId)
     state.isSubAgent = isSubAgent
     // logger.info("isSubAgent = " + isSubAgent)
 
@@ -164,8 +193,7 @@ export async function ensureSessionInitialized(
     state.currentTurn = countTurns(state, messages)
     state.nudges.turnNudgeAnchors = collectTurnNudgeAnchors(messages)
 
-    const persisted = await loadSessionState(sessionId, logger)
-    if (persisted === null) {
+    if (persisted === null || !pruneMessages) {
         return
     }
 
@@ -174,7 +202,7 @@ export async function ensureSessionInitialized(
     }
 
     state.prune.tools = loadPruneMap(persisted.prune.tools)
-    state.prune.messages = loadPruneMessagesState(persisted.prune.messages)
+    state.prune.messages = pruneMessages
     state.nudges.contextLimitAnchors = new Set<string>(persisted.nudges.contextLimitAnchors || [])
     state.nudges.turnNudgeAnchors = new Set<string>([
         ...state.nudges.turnNudgeAnchors,

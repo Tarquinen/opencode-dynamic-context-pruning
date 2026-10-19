@@ -112,11 +112,11 @@ export function resolveBoundaryIds(
     return { startReference, endReference }
 }
 
-export function resolveSelection(
+export async function resolveSelection(
     context: SearchContext,
     startReference: BoundaryReference,
     endReference: BoundaryReference,
-): SelectionResolution {
+): Promise<SelectionResolution> {
     const startRawIndex = startReference.rawIndex
     const endRawIndex = endReference.rawIndex
     const messageIds: string[] = []
@@ -143,7 +143,7 @@ export function resolveSelection(
         }
 
         if (!messageTokenById.has(messageId)) {
-            messageTokenById.set(messageId, countAllMessageTokens(rawMessage))
+            messageTokenById.set(messageId, await countAllMessageTokens(rawMessage))
         }
 
         const parts = Array.isArray(rawMessage.parts) ? rawMessage.parts : []

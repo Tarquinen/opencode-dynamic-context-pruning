@@ -128,7 +128,7 @@ export async function handleSweepCommand(ctx: SweepCommandContext): Promise<void
     const params = getCurrentParams(state, messages, logger)
     const protectedTools = config.commands.protectedTools
 
-    syncToolCache(state, config, logger, messages)
+    await syncToolCache(state, config, logger, messages)
     buildToolIdList(state, messages)
 
     // Parse optional numeric argument

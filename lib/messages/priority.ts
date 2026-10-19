@@ -17,11 +17,11 @@ export interface CompressionPriorityEntry {
 
 export type CompressionPriorityMap = Map<string, CompressionPriorityEntry>
 
-export function buildPriorityMap(
+export async function buildPriorityMap(
     config: PluginConfig,
     state: SessionState,
     messages: WithParts[],
-): CompressionPriorityMap {
+): Promise<CompressionPriorityMap> {
     if (config.compress.mode !== "message") {
         return new Map()
     }
@@ -50,7 +50,7 @@ export function buildPriorityMap(
             continue
         }
 
-        const tokenCount = countAllMessageTokens(message)
+        const tokenCount = await countAllMessageTokens(message)
         priorities.set(rawMessageId, {
             ref,
             tokenCount,

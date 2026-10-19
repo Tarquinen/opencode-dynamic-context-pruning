@@ -15,6 +15,35 @@ export function allocateBlockId(state: SessionState): number {
     return next
 }
 
+/**
+ * Block IDs that the next `count` allocateBlockId calls will return, without advancing
+ * state. Lets compression count every wrapped summary before mutating anything.
+ */
+export function peekBlockIds(state: SessionState, count: number): number[] {
+    const next = state.prune.messages.nextBlockId
+    const first = Number.isInteger(next) && next >= 1 ? next : 1
+    return Array.from({ length: count }, (_, index) => first + index)
+}
+
+/**
+ * Throws before any mutation if, while counts were awaited, the session state was reset or
+ * restored (replacing `prune`) or block allocation moved.
+ */
+export function assertPlannedBlockIds(
+    state: SessionState,
+    prune: PruneMessagesState,
+    planned: number[],
+): void {
+    if (
+        state.prune.messages !== prune ||
+        (planned.length > 0 && peekBlockIds(state, 1)[0] !== planned[0])
+    ) {
+        throw new Error(
+            "DCP compression state changed while counting tokens; nothing was compressed",
+        )
+    }
+}
+
 export function allocateRunId(state: SessionState): number {
     const next = state.prune.messages.nextRunId
     if (!Number.isInteger(next) || next < 1) {

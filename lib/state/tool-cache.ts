@@ -3,18 +3,19 @@ import type { Logger } from "../logger"
 import { PluginConfig } from "../config"
 import { isMessageCompacted } from "./utils"
 import { countToolTokens } from "../token-utils"
+import { TokenCountError } from "../token-counter"
 
 const MAX_TOOL_CACHE_SIZE = 1000
 
 /**
  * Sync tool parameters from session messages.
  */
-export function syncToolCache(
+export async function syncToolCache(
     state: SessionState,
     config: PluginConfig,
     logger: Logger,
     messages: WithParts[],
-): void {
+): Promise<void> {
     try {
         logger.info("Syncing tool parameters from OpenCode messages")
 
@@ -51,7 +52,7 @@ export function syncToolCache(
                     continue
                 }
 
-                const tokenCount = countToolTokens(part)
+                const tokenCount = await countToolTokens(part)
 
                 state.toolParameters.set(part.callID, {
                     tool: part.tool,
@@ -73,6 +74,8 @@ export function syncToolCache(
         )
         trimToolParametersCache(state)
     } catch (error) {
+        // A failed count must not become an omitted or zero-token cache entry.
+        if (error instanceof TokenCountError) throw error
         logger.warn("Failed to sync tool parameters from OpenCode", {
             error: error instanceof Error ? error.message : String(error),
         })

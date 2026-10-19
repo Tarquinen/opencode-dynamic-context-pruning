@@ -32,10 +32,11 @@ export function openContextModal(api: TuiApi, config: PluginConfig) {
             showStatusDialog(api, "Context", "No session", "Open a session first.")
             return
         }
+        const breakdown = await analyzeContextTokens(data.state, data.messages)
         showDialog(api, () => (
             <ContextDialog
                 api={api}
-                breakdown={analyzeContextTokens(data.state, data.messages)}
+                breakdown={breakdown}
                 onBack={() => openPanelModal(api, config)}
             />
         ))

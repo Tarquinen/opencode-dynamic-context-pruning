@@ -1,5 +1,5 @@
 import type { WithParts } from "../state"
-import { ensureSessionInitialized, refreshManualMode } from "../state"
+import { ensureSessionInitialized, exclusive, refreshManualMode } from "../state"
 import { saveSessionState } from "../state/persistence"
 import { assignMessageRefs } from "../message-ids"
 import { isIgnoredUserMessage } from "../messages/query"
@@ -34,18 +34,23 @@ export interface PreparedSession {
     searchContext: SearchContext
 }
 
-export async function prepareSession(
-    ctx: ToolContext,
-    toolCtx: RunContext,
-    title: string,
-): Promise<PreparedSession> {
-    await refreshManualMode(ctx.state, toolCtx.sessionID, ctx.logger, ctx.config.manualMode.enabled)
+async function assertCompressionAllowed(ctx: ToolContext, sessionID: string): Promise<void> {
+    await refreshManualMode(ctx.state, sessionID, ctx.logger, ctx.config.manualMode.enabled)
 
     if (ctx.state.manualMode && ctx.state.manualMode !== "compress-pending") {
         throw new Error(
             "Manual mode: compress blocked. Do not retry until `<compress triggered manually>` appears in user context.",
         )
     }
+}
+
+/** Checks manual mode and asks permission; runs before the state lock, as approval may wait. */
+export async function authoriseCompression(
+    ctx: ToolContext,
+    toolCtx: RunContext,
+    title: string,
+): Promise<void> {
+    await exclusive(ctx.state, () => assertCompressionAllowed(ctx, toolCtx.sessionID))
 
     await toolCtx.ask({
         permission: "compress",
@@ -55,7 +60,13 @@ export async function prepareSession(
     })
 
     toolCtx.metadata({ title })
+}
 
+/** Call within exclusive(ctx.state, ...) so no other operation can switch the shared state. */
+export async function prepareSession(
+    ctx: ToolContext,
+    toolCtx: RunContext,
+): Promise<PreparedSession> {
     const rawMessages = await fetchSessionMessages(ctx.client, toolCtx.sessionID)
 
     await ensureSessionInitialized(
@@ -66,6 +77,8 @@ export async function prepareSession(
         rawMessages,
         ctx.config.manualMode.enabled,
     )
+    // Manual mode may have been switched on while permission was pending.
+    await assertCompressionAllowed(ctx, toolCtx.sessionID)
 
     assignMessageRefs(ctx.state, rawMessages)
 

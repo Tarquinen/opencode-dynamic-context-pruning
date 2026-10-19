@@ -115,9 +115,9 @@ export function createPruneMessagesState(): PruneMessagesState {
     }
 }
 
-export function loadPruneMessagesState(
+export async function loadPruneMessagesState(
     persisted?: PersistedPruneMessagesState,
-): PruneMessagesState {
+): Promise<PruneMessagesState> {
     const state = createPruneMessagesState()
     if (!persisted || typeof persisted !== "object") {
         return state
@@ -205,7 +205,7 @@ export function loadPruneMessagesState(
                     typeof block.summaryTokens === "number" && Number.isFinite(block.summaryTokens)
                         ? Math.max(0, block.summaryTokens)
                         : typeof block.summary === "string"
-                          ? countTokens(block.summary)
+                          ? await countTokens(block.summary)
                           : 0,
                 durationMs:
                     typeof block.durationMs === "number" && Number.isFinite(block.durationMs)

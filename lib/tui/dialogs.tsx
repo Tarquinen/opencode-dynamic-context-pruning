@@ -23,7 +23,7 @@ export function StatusDialog(props: {
 
 export function ContextDialog(props: {
     api: ViewApi
-    breakdown: ReturnType<typeof analyzeContextTokens>
+    breakdown: Awaited<ReturnType<typeof analyzeContextTokens>>
     onBack: () => void
 }) {
     const theme = props.api.theme.current

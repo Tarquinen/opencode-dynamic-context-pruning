@@ -131,7 +131,7 @@ function repeatedWord(word: string, count: number): string {
     return Array.from({ length: count }, () => word).join(" ")
 }
 
-test("injectMessageIds injects ID into every tool output for assistant messages", () => {
+test("injectMessageIds injects ID into every tool output for assistant messages", async () => {
     const sessionID = "ses_message_priority_tags"
     const messages: WithParts[] = [
         {
@@ -192,7 +192,7 @@ test("injectMessageIds injects ID into every tool output for assistant messages"
     const config = buildConfig()
 
     assignMessageRefs(state, messages)
-    const compressionPriorities = buildPriorityMap(config, state, messages)
+    const compressionPriorities = await buildPriorityMap(config, state, messages)
 
     injectMessageIds(state, config, messages, compressionPriorities)
 
@@ -228,7 +228,7 @@ test("injectMessageIds injects ID into every tool output for assistant messages"
     assert.match((assistantToolTwo as any).state.output, /m0002<\/dcp-message-id>/)
 })
 
-test("injectMessageIds marks every protected user text part as BLOCKED in message mode", () => {
+test("injectMessageIds marks every protected user text part as BLOCKED in message mode", async () => {
     const sessionID = "ses_message_blocked_user_tags"
     const messages: WithParts[] = [
         {
@@ -260,7 +260,7 @@ test("injectMessageIds marks every protected user text part as BLOCKED in messag
     config.compress.protectUserMessages = true
 
     assignMessageRefs(state, messages)
-    const compressionPriorities = buildPriorityMap(config, state, messages)
+    const compressionPriorities = await buildPriorityMap(config, state, messages)
 
     injectMessageIds(state, config, messages, compressionPriorities)
 
@@ -281,7 +281,7 @@ test("injectMessageIds marks every protected user text part as BLOCKED in messag
     )
 })
 
-test("injectMessageIds injects ID into every tool output in range mode", () => {
+test("injectMessageIds injects ID into every tool output in range mode", async () => {
     const sessionID = "ses_range_message_id_tags"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, repeatedWord("investigate", 6000), 1),
@@ -325,7 +325,7 @@ test("injectMessageIds injects ID into every tool output in range mode", () => {
     assert.match((assistantToolTwo as any).state.output, /m0002<\/dcp-message-id>/)
 })
 
-test("message mode marks compress tool messages as high priority even when short", () => {
+test("message mode marks compress tool messages as high priority even when short", async () => {
     const sessionID = "ses_message_compress_high_priority"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, "Please compress this chunk.", 1),
@@ -353,7 +353,7 @@ test("message mode marks compress tool messages as high priority even when short
     const config = buildConfig()
 
     assignMessageRefs(state, messages)
-    const compressionPriorities = buildPriorityMap(config, state, messages)
+    const compressionPriorities = await buildPriorityMap(config, state, messages)
 
     assert.equal(compressionPriorities.get("msg-assistant-1")?.priority, "high")
 
@@ -371,7 +371,7 @@ test("message mode marks compress tool messages as high priority even when short
     )
 })
 
-test("message-mode nudges append to existing text parts and list only earlier visible high-priority message IDs", () => {
+test("message-mode nudges append to existing text parts and list only earlier visible high-priority message IDs", async () => {
     const sessionID = "ses_message_priority_nudges"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, repeatedWord("alpha", 6000), 1),
@@ -390,7 +390,7 @@ test("message-mode nudges append to existing text parts and list only earlier vi
     })
     state.nudges.contextLimitAnchors.add("msg-user-2")
 
-    const compressionPriorities = buildPriorityMap(config, state, messages)
+    const compressionPriorities = await buildPriorityMap(config, state, messages)
 
     applyAnchoredNudges(
         state,
@@ -419,7 +419,7 @@ test("message-mode nudges append to existing text parts and list only earlier vi
     assert.doesNotMatch((injectedNudge as any).text, /m0004/)
 })
 
-test("message-mode nudges exclude protected user messages from priority guidance", () => {
+test("message-mode nudges exclude protected user messages from priority guidance", async () => {
     const sessionID = "ses_message_blocked_priority_nudges"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, repeatedWord("alpha", 6000), 1),
@@ -433,7 +433,7 @@ test("message-mode nudges exclude protected user messages from priority guidance
     assignMessageRefs(state, messages)
     state.nudges.contextLimitAnchors.add("msg-user-2")
 
-    const compressionPriorities = buildPriorityMap(config, state, messages)
+    const compressionPriorities = await buildPriorityMap(config, state, messages)
 
     applyAnchoredNudges(
         state,
@@ -456,7 +456,7 @@ test("message-mode nudges exclude protected user messages from priority guidance
     assert.doesNotMatch((injectedNudge as any).text, /m0001/)
 })
 
-test("range-mode nudges append to existing text parts before tool outputs", () => {
+test("range-mode nudges append to existing text parts before tool outputs", async () => {
     const sessionID = "ses_range_nudge_injection"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, repeatedWord("alpha", 6000), 1),
@@ -502,7 +502,7 @@ test("range-mode nudges append to existing text parts before tool outputs", () =
     assert.equal((toolOutput as any).state.output, "task output body")
 })
 
-test("range-mode nudges inject only once for assistant messages with multiple text parts", () => {
+test("range-mode nudges inject only once for assistant messages with multiple text parts", async () => {
     const sessionID = "ses_range_nudge_multi_text"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, "Hello", 1),
@@ -539,7 +539,7 @@ test("range-mode nudges inject only once for assistant messages with multiple te
     assert.doesNotMatch((messages[1]?.parts[1] as any).text, /Base context nudge/)
 })
 
-test("range-mode nudges skip empty assistant messages to avoid prefill (issue #463)", () => {
+test("range-mode nudges skip empty assistant messages to avoid prefill (issue #463)", async () => {
     const sessionID = "ses_range_nudge_empty_assistant"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, "Hello", 1),
@@ -572,7 +572,7 @@ test("range-mode nudges skip empty assistant messages to avoid prefill (issue #4
     assert.equal(messages[1]?.parts.length, 0)
 })
 
-test("range-mode nudges skip assistant with only pending tool parts (issue #463)", () => {
+test("range-mode nudges skip assistant with only pending tool parts (issue #463)", async () => {
     const sessionID = "ses_range_nudge_pending_tool"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, "Hello", 1),
@@ -619,7 +619,7 @@ test("range-mode nudges skip assistant with only pending tool parts (issue #463)
     assert.equal(messages[1]?.parts[0]?.type, "tool")
 })
 
-test("range-mode nudges skip assistant messages with only empty text parts (issue #463)", () => {
+test("range-mode nudges skip assistant messages with only empty text parts (issue #463)", async () => {
     const sessionID = "ses_range_nudge_empty_text"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, "Hello", 1),
@@ -654,7 +654,7 @@ test("range-mode nudges skip assistant messages with only empty text parts (issu
     assert.equal((messages[1]?.parts[0] as any).text, "")
 })
 
-test("message-mode rendered compressed summaries mark block IDs as BLOCKED", () => {
+test("message-mode rendered compressed summaries mark block IDs as BLOCKED", async () => {
     const sessionID = "ses_message_blocked_blocks"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, "Original request", 1),
@@ -704,7 +704,7 @@ test("message-mode rendered compressed summaries mark block IDs as BLOCKED", () 
     assert.doesNotMatch(summaryText, /<dcp-message-id>b7<\/dcp-message-id>/)
 })
 
-test("range-mode rendered compressed summaries keep block IDs", () => {
+test("range-mode rendered compressed summaries keep block IDs", async () => {
     const sessionID = "ses_range_visible_blocks"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, "Original request", 1),
@@ -814,7 +814,7 @@ test("hallucination stripping does not affect non-dcp tags", async () => {
     )
 })
 
-test("hallucination stripping preserves content when dcp-message-id is mentioned in text (issue #556)", () => {
+test("hallucination stripping preserves content when dcp-message-id is mentioned in text (issue #556)", async () => {
     const input =
         "The tag called `<dcp-message-id>` is used to track messages. " +
         "This text should survive.\n\n" +
@@ -826,7 +826,7 @@ test("hallucination stripping preserves content when dcp-message-id is mentioned
     )
 })
 
-test("hallucination stripping handles priority on injected message-id suffixes", () => {
+test("hallucination stripping handles priority on injected message-id suffixes", async () => {
     const input =
         "The tag called `<dcp-message-id>` is used to track messages. " +
         "This text should survive.\n\n" +
@@ -838,14 +838,14 @@ test("hallucination stripping handles priority on injected message-id suffixes",
     )
 })
 
-test("hallucination stripping removes trailing mXXXX</parameter> artifact (issue #555)", () => {
+test("hallucination stripping removes trailing mXXXX</parameter> artifact (issue #555)", async () => {
     assert.equal(
         stripHallucinationsFromString("Total: maybe 20 lines changed.\n\nm0340</parameter>\n\n"),
         "Total: maybe 20 lines changed.\n\n",
     )
 })
 
-test("injectMessageIds skips empty assistant messages to avoid prefill (issue #463)", () => {
+test("injectMessageIds skips empty assistant messages to avoid prefill (issue #463)", async () => {
     const sessionID = "ses_empty_assistant"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, "Hello", 1),
@@ -871,7 +871,7 @@ test("injectMessageIds skips empty assistant messages to avoid prefill (issue #4
     assert.equal(emptyAssistant.parts.length, 0, "empty assistant should get no synthetic parts")
 })
 
-test("injectMessageIds skips assistant with only pending tool parts (issue #463)", () => {
+test("injectMessageIds skips assistant with only pending tool parts (issue #463)", async () => {
     const sessionID = "ses_pending_tool_assistant"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, "Hello", 1),
@@ -915,7 +915,7 @@ test("injectMessageIds skips assistant with only pending tool parts (issue #463)
     assert.equal(pendingAssistant.parts[0]!.type, "tool")
 })
 
-test("injectMessageIds skips assistant with empty text part (issue #463)", () => {
+test("injectMessageIds skips assistant with empty text part (issue #463)", async () => {
     const sessionID = "ses_empty_text_assistant"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, "Hello", 1),
