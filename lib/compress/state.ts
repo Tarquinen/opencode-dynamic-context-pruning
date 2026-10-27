@@ -55,7 +55,8 @@ export function wrapCompressedSummary(
     format: IdFormat = "xml",
 ): string {
     const header = COMPRESSED_BLOCK_HEADER
-    const footer = formatMessageIdTag(formatBlockRef(blockId, format), undefined, format)
+    const ref = formatBlockRef(blockId, format)
+    const footer = `Originals: dcp_read({"startId":"${ref}"})\n${formatMessageIdTag(ref, undefined, format)}`
     const body = summary.trim()
     if (body.length === 0) {
         return `${header}\n${footer}`

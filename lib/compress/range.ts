@@ -26,8 +26,9 @@ import {
     wrapCompressedSummary,
 } from "./state"
 import type { CompressRangeToolArgs } from "./types"
+import { generateSummary, selectedSource, redact, MODEL_SELECTION_INSTRUCTIONS } from "./model"
 
-function buildSchema(format: IdFormat) {
+function buildSchema(format: IdFormat, configured: boolean) {
     return {
         topic: tool.schema
             .string()
@@ -45,13 +46,21 @@ function buildSchema(format: IdFormat) {
                         .describe(
                             `Message or block ID marking the end of range (e.g. ${formatMessageRef(12, format)}, ${formatBlockRef(5, format)})`,
                         ),
-                    summary: tool.schema
-                        .string()
-                        .describe("Complete technical summary replacing all content in range"),
+                    ...(!configured
+                        ? {
+                              summary: tool.schema
+                                  .string()
+                                  .describe(
+                                      "Complete technical summary replacing all content in range",
+                                  ),
+                          }
+                        : {}),
                 }),
             )
             .describe(
-                "One or more ranges to compress, each with start/end boundaries and a summary",
+                configured
+                    ? "Closed ranges with start/end boundaries; the configured model authors their summaries"
+                    : "One or more ranges to compress, each with start/end boundaries and a summary",
             ),
     }
 }
@@ -59,13 +68,29 @@ function buildSchema(format: IdFormat) {
 export function createCompressRangeTool(ctx: ToolContext): ReturnType<typeof tool> {
     ctx.prompts.reload()
     const runtimePrompts = ctx.prompts.getRuntimePrompts()
+    const configured = ctx.config.compress.model !== undefined
 
     return tool({
-        description: runtimePrompts.compressRange + rangeFormat(ctx.state.idFormat),
-        args: buildSchema(ctx.state.idFormat),
+        description: configured
+            ? MODEL_SELECTION_INSTRUCTIONS
+            : runtimePrompts.compressRange + rangeFormat(ctx.state.idFormat),
+        args: buildSchema(ctx.state.idFormat, configured),
         async execute(args, toolCtx) {
-            const input = args as CompressRangeToolArgs
+            if (configured && ctx.config.compress.mode !== "range")
+                throw new Error(
+                    "DCP compress.model currently requires compress.mode='range'; original context retained",
+                )
+            const input = configured
+                ? ({
+                      ...args,
+                      content: args.content.map((entry) => ({
+                          ...entry,
+                          summary: "[pending configured model]",
+                      })),
+                  } as CompressRangeToolArgs)
+                : (args as CompressRangeToolArgs)
             validateArgs(input)
+            if (configured) toolCtx.abort.throwIfAborted()
             const callId =
                 typeof (toolCtx as unknown as { callID?: unknown }).callID === "string"
                     ? (toolCtx as unknown as { callID: string }).callID
@@ -78,6 +103,15 @@ export function createCompressRangeTool(ctx: ToolContext): ReturnType<typeof too
             )
             const resolvedPlans = resolveRanges(input, searchContext, ctx.state)
             validateNonOverlapping(resolvedPlans)
+            if (
+                configured &&
+                resolvedPlans.some(
+                    (plan) =>
+                        plan.selection.messageIds.includes(toolCtx.messageID) ||
+                        (callId !== undefined && plan.selection.toolIds.includes(callId)),
+                )
+            )
+                throw new Error("DCP model compression cannot include its active compression call")
 
             const notifications: NotificationEntry[] = []
             const preparedPlans: Array<{
@@ -90,6 +124,29 @@ export function createCompressRangeTool(ctx: ToolContext): ReturnType<typeof too
             let totalCompressedMessages = 0
 
             for (const plan of resolvedPlans) {
+                const source = configured
+                    ? selectedSource(plan.selection, searchContext, ctx.state.idFormat)
+                    : undefined
+                if (configured) {
+                    plan.entry.summary = await generateSummary(
+                        ctx,
+                        input.topic,
+                        source!,
+                        toolCtx.abort,
+                    )
+                    const references = parseBlockPlaceholders(
+                        plan.entry.summary,
+                        ctx.state.idFormat,
+                    )
+                    if (
+                        references.some(
+                            (ref) => !plan.selection.requiredBlockIds.includes(ref.blockId),
+                        )
+                    )
+                        throw new Error(
+                            "DCP summarizer referenced an unselected block; original context retained",
+                        )
+                }
                 const parsedPlaceholders = parseBlockPlaceholders(
                     plan.entry.summary,
                     ctx.state.idFormat,
@@ -145,15 +202,22 @@ export function createCompressRangeTool(ctx: ToolContext): ReturnType<typeof too
                     ctx.state.idFormat,
                 )
 
+                // Protected verbatim outputs may contain the same image payload again.
+                const finalSummary = source
+                    ? (redact(source.media.transform(completedSummary.expandedSummary)) as string)
+                    : completedSummary.expandedSummary
+                await source?.media.save()
+
                 preparedPlans.push({
                     entry: plan.entry,
                     selection: plan.selection,
                     anchorMessageId: plan.anchorMessageId,
-                    finalSummary: completedSummary.expandedSummary,
+                    finalSummary,
                     consumedBlockIds: completedSummary.consumedBlockIds,
                 })
             }
 
+            if (configured) toolCtx.abort.throwIfAborted()
             const runId = allocateRunId(ctx.state)
 
             for (const preparedPlan of preparedPlans) {

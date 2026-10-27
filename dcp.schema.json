@@ -134,6 +134,21 @@
             "description": "Configuration for the unified compress tool",
             "additionalProperties": false,
             "properties": {
+                "model": {
+                    "type": "string",
+                    "pattern": "^[^\\s/#]+/[^\\s#]+(?:#[^\\s#]+)?$",
+                    "description": "Optional native summarizer provider/model#variant. Unset preserves main-authored range summaries. Requires range mode."
+                },
+                "fallbackModels": {
+                    "type": "array",
+                    "items": { "type": "string", "pattern": "^[^\\s/#]+/[^\\s#]+(?:#[^\\s#]+)?$" },
+                    "description": "Explicit ordered fallbacks, used only after provider errors, never cancellation, unavailable models or invalid summaries."
+                },
+                "modelTimeoutMs": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Optional inference timeout. By default derived from estimated selected input and model output budget."
+                },
                 "mode": {
                     "type": "string",
                     "enum": ["range", "message"],
@@ -157,8 +172,8 @@
                     "description": "When enabled, active summary tokens extend the effective maxContextLimit used for context-limit nudges."
                 },
                 "maxContextLimit": {
-                    "description": "Soft upper threshold. Above this, DCP keeps sending strong compression nudges (based on nudgeFrequency), so the model is pushed to compress. Accepts number or \"X%\" of the model context window.",
-                    "default": 100000,
+                    "description": "Soft upper threshold. Above this, DCP keeps sending strong compression nudges (based on nudgeFrequency), so the model is pushed to compress. Accepts a number, \"X%\", or { tokens, percent }; when both are given the smaller wins.",
+                    "default": { "tokens": 500000, "percent": "60%" },
                     "oneOf": [
                         {
                             "type": "number"
@@ -166,12 +181,18 @@
                         {
                             "type": "string",
                             "pattern": "^\\d+(?:\\.\\d+)?%$"
-                        }
-                    ]
+                        },                        {
+                            "type": "object",
+                            "properties": {
+                                "tokens": { "type": "number", "minimum": 0 },
+                                "percent": { "oneOf": [ { "type": "number" }, { "type": "string", "pattern": "^\\d+(?:\\.\\d+)?%$" } ] }
+                            },
+                            "additionalProperties": false
+                        }                    ]
                 },
                 "minContextLimit": {
-                    "description": "Soft lower threshold for reminder nudges. Below this, turn/iteration reminders are off (compression is less likely). At or above this, reminders are on. Accepts number or \"X%\" of the model context window.",
-                    "default": 50000,
+                    "description": "Soft lower threshold for reminder nudges. Below this, turn/iteration reminders are off (compression is less likely). At or above this, reminders are on. Accepts a number, \"X%\", or { tokens, percent }; when both are given the smaller wins.",
+                    "default": { "tokens": 200000, "percent": "30%" },
                     "oneOf": [
                         {
                             "type": "number"
@@ -179,8 +200,14 @@
                         {
                             "type": "string",
                             "pattern": "^\\d+(?:\\.\\d+)?%$"
-                        }
-                    ]
+                        },                        {
+                            "type": "object",
+                            "properties": {
+                                "tokens": { "type": "number", "minimum": 0 },
+                                "percent": { "oneOf": [ { "type": "number" }, { "type": "string", "pattern": "^\\d+(?:\\.\\d+)?%$" } ] }
+                            },
+                            "additionalProperties": false
+                        }                    ]
                 },
                 "modelMaxLimits": {
                     "description": "Per-model override for maxContextLimit by exact provider/model key. If set, this takes priority over the global maxContextLimit.",
@@ -318,3 +345,5 @@
         }
     }
 }
+
+

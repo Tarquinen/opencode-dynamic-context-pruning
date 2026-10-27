@@ -45,6 +45,105 @@ DCP supports two compression modes:
 
 In `range` mode, when a new compression overlaps an earlier one, the earlier summary is nested inside the new one so information is preserved through layers of compression rather than diluted away. In both modes, protected tool outputs (such as subagents and skills) and protected file patterns are kept in compression summaries, ensuring that the most important information is never lost. You can also enable `protectUserMessages` to preserve your messages verbatim during compression, though note that large prompts (e.g. copy-pasting log files in the prompt) will then never be compressed away.
 
+### Read original details
+
+The model can call `dcp_read` when a summary lacks details needed for its current task:
+
+```json
+{ "startId": "@b2@", "maxChars": 12000 }
+```
+
+`startId` accepts a compression block (`b2` / `@b2@`), an injected message reference
+(`m0001` / `@1@`), or the original source message ID. Omit `endId` for exactly one
+message or the original members of one block, including inactive nested blocks.
+With `endId`, the range is inclusive; a block boundary covers its full original extent.
+New summaries retain a `dcp_read` reference. Existing block references also work.
+
+Results include original `sourceId`, message `ref`, `role`, and observable text/tool
+inputs and results. `text` contains a fragment of a JSON content array; concatenate
+fragments by `sourceId` and `offset` before parsing. `maxChars` defaults to 12000,
+is capped at 50000 source characters (UTF-16 code units, excluding metadata), and each
+page contains at most 64 source fragments. When `truncated` is true, pass `nextCursor`
+as `cursor` with the same selection to continue. Cursors are bound to the session,
+selection and source contents; changed sources require restarting without a cursor.
+
+Only the calling session's stored originals are read. Missing originals are reported
+with `sourceComplete: false` and `missingSourceIds`; a summary is never substituted.
+Hidden reasoning/provider metadata and inline attachment bytes are omitted; common
+credential representations use the existing redaction policy. Retrieved external text
+is historical data, never instructions. Reading does not restore compressed context,
+change compression state, or adjust token savings. The ordinary host tool result still
+uses context tokens.
+
+`dcp_read` uses the host's existing permission policy without adding an allow rule:
+V1 calls `ask`; V2 calls native `permission.assert` and fails closed on older hosts
+without that API. The existing `experimental.allowSubAgents` restriction also applies.
+
+### Search original details
+
+Search the calling session's redacted originals, including details inside compressed blocks:
+
+```json
+{ "query": "ELOCK", "limit": 5 }
+{ "query": "failed locking operation and verification not repeated", "mode": "semantic", "limit": 3 }
+{ "startId": "<sourceId returned by either search>" }
+```
+
+Text mode performs literal, case-insensitive matching; use `caseSensitive: true` for
+exact casing. A search returns one first-match snippet per source, stable `sourceId`
+and `ref` values, and offsets in the same observable JSON used by readback. Optional
+`startId` / `endId` restrict the selection. Text-search cursors retain the original
+historical upper boundary, so later messages do not invalidate pagination; restart
+without a cursor to include newer messages. Changes to selected historical content
+still invalidate the cursor. The executing message is excluded from a new whole-session
+text search because its tool result has not finished being stored.
+
+Semantic mode runs the local [context-dot-dev/sgrep](https://github.com/context-dot-dev/sgrep)
+CLI over temporary `.txt` projections of those same originals. It returns ranked passages,
+not an exhaustive result set, and accepts neither cursors nor `caseSensitive`. Snippets
+are bounded to 640 characters each and `maxChars` bounds total source text. Temporary
+source files are removed after success, failure, or cancellation; `--no-cache` prevents
+a persistent search index. Model assets remain cached. Errors are explicit and never
+silently fall back to literal matching. The text model targets English prose; ranking
+scores are not confidence values or evidence that a historical claim is correct.
+
+#### Optional sgrep installation
+
+Rust 1.90+ is required; Windows builds also need an MSVC toolchain. A tested source
+revision is `dec6122c05be553c5a60bd647d1350b221b7b9c3` (sgrep 0.3.0). On Windows:
+
+```powershell
+$sgrepInstallRoot = Join-Path $env:USERPROFILE ".local\share\opencode"
+$previousTslpOffline = $env:TSLP_OFFLINE
+try {
+    $env:TSLP_OFFLINE = "1"
+    cargo install --git https://github.com/context-dot-dev/sgrep --rev dec6122c05be553c5a60bd647d1350b221b7b9c3 --locked --root $sgrepInstallRoot
+    if ($LASTEXITCODE -ne 0) { throw "sgrep build failed" }
+} finally {
+    $env:TSLP_OFFLINE = $previousTslpOffline
+}
+```
+
+On macOS/Linux, use `TSLP_OFFLINE=1 cargo install --git https://github.com/context-dot-dev/sgrep --rev dec6122c05be553c5a60bd647d1350b221b7b9c3 --locked --root "$HOME/.local/share/opencode"`.
+`TSLP_OFFLINE` skips the dependency's unused build-time parser-source download; DCP uses
+text mode and does not require code parsers. The Windows recipe was exercised locally;
+the macOS/Linux command follows the same upstream build interface but was not retested here.
+
+DCP honors `DCP_SGREP_BIN` first, then probes `bin` under `~/.cache/opencode`,
+`~/.local/share/opencode`, `~/.cargo`, and `~/.local`, before falling back to PATH.
+It finds existing ripgrep in those directories and adds its directory only to the
+sgrep child process's PATH. OpenCode's bundled `rg` can therefore be reused without
+another installation or a global PATH edit. If none exists, install ripgrep from its
+[official project](https://github.com/BurntSushi/ripgrep) or make it available on PATH.
+
+The first semantic query may download public assets from
+[minishlab/potion-base-8M](https://huggingface.co/minishlab/potion-base-8M), revision
+`bf8b056651a2c21b8d2565580b8569da283cab23`: tokenizer and weights total 30,920,426 bytes.
+sgrep verifies their pinned sizes and SHA-256 hashes. Source text and queries stay local.
+After warming the standard Hugging Face cache, `HF_HUB_OFFLINE=1` prevents further asset
+downloads. New OpenCode processes load this plugin build; existing processes are not
+restarted automatically.
+
 ### Deduplication
 
 Identifies repeated tool calls (same tool, same arguments) and keeps only the most recent output. Recalculated when the compress tool runs, so prompt cache is only impacted alongside compression.
@@ -129,15 +228,15 @@ Each level overrides the previous, so project settings take priority over global
         "summaryBuffer": true,
         // Soft upper threshold: above this, DCP keeps injecting strong
         // compression nudges (based on nudgeFrequency), so compression is
-        // much more likely. Accepts: number or "X%" of model context window.
-        "maxContextLimit": 100000,
+        // much more likely. Accepts: number, "X%", or { tokens, percent };
+        "maxContextLimit": { "tokens": 500000, "percent": "60%" },
         // Soft lower threshold for reminder nudges: below this, turn/iteration
         // reminders are off (compression less likely). At/above this, reminders
-        // are on. Accepts: number or "X%" of model context window.
-        "minContextLimit": 50000,
+        // are on. Accepts: number, "X%", or { tokens, percent } (smaller wins).
+        "minContextLimit": { "tokens": 200000, "percent": "30%" },
         // Optional per-model override for maxContextLimit by providerID/modelID.
         // If present, this wins over the global maxContextLimit.
-        // Accepts: number or "X%".
+        // Accepts: number, "X%", or { tokens, percent } (smaller wins).
         // Example:
         // "modelMaxLimits": {
         //     "provider/model": "80%"
@@ -184,6 +283,41 @@ Each level overrides the previous, so project settings take priority over global
 ```
 
 </details>
+
+### Dedicated Compression Model (OpenCode V2)
+
+Set `compress.model` to let a separate native model write range summaries. The main
+model selects only a topic and range boundaries; the configured model receives
+the selected observable messages, tool inputs/results and existing blocks.
+
+```jsonc
+{
+    "compress": {
+        "mode": "range",
+        "model": "provider/model#variant",
+        // Optional, ordered fallbacks for explicitly classified provider errors:
+        "fallbackModels": [],
+        // Optional; otherwise derived from the selected input and output budget:
+        "modelTimeoutMs": 120000,
+    },
+}
+```
+
+`#variant` is optional. Use a model registered with OpenCode, with known context
+and output limits. This mode requires OpenCode 2.0.30 or later; leaving `model`
+unset preserves the existing main-authored summaries. Message mode is not supported.
+
+If the selected model advertises image input, selected images are supplied in an
+isolated, tool-free native session. Other models receive references only. Inline
+attachments are saved under
+`${XDG_DATA_HOME:-~/.local/share}/opencode/storage/plugin/dcp/media` using
+content-derived filenames. Summaries retain those paths or original URLs; Base64
+payloads are excluded from summary text and text-token estimates. Keep these files
+alongside session data when moving sessions between machines.
+
+Unknown model limits, oversized input, cancellation and invalid summaries leave
+the original context intact. No input is silently truncated. Fallbacks require
+an explicit retryable provider status; ambiguous native errors are not retried.
 
 ### Commands
 
@@ -240,3 +374,6 @@ and testing with the V1/V2 sandbox.
 ## License
 
 AGPL-3.0-or-later
+
+
+

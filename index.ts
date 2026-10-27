@@ -19,6 +19,7 @@ import {
 import { configureClientAuth, isSecureMode } from "./lib/auth"
 import { startAutoUpdate } from "./lib/update"
 import { setup } from "./lib/v2"
+import { createReadbackTool } from "./lib/readback"
 
 const server: Plugin = (async (ctx) => {
     const config = getConfig(ctx)
@@ -80,6 +81,12 @@ const server: Plugin = (async (ctx) => {
         ),
         event: createEventHandler(state, logger),
         tool: {
+            dcp_read: createReadbackTool({
+                client: ctx.client,
+                state,
+                logger,
+                allowSubAgents: config.experimental.allowSubAgents,
+            }),
             ...(config.compress.permission !== "deny" && {
                 compress:
                     config.compress.mode === "message"
@@ -104,6 +111,7 @@ const server: Plugin = (async (ctx) => {
             }
 
             const toolsToAdd: string[] = []
+            if (!config.experimental.allowSubAgents) toolsToAdd.push("dcp_read")
             if (config.compress.permission !== "deny" && !config.experimental.allowSubAgents) {
                 toolsToAdd.push("compress")
             }

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from "fs"
 import { join, dirname } from "path"
 import { homedir } from "os"
-import { parse } from "jsonc-parser/lib/esm/main.js"
+import * as jsonc from "jsonc-parser"
 import type { PluginInput } from "@opencode-ai/plugin"
 
 type ConfigContext = Pick<PluginInput, "directory"> & {
@@ -22,15 +22,21 @@ export interface Deduplication {
     protectedTools: string[]
 }
 
+/** Absolute tokens, a percent of the model window, or both (the smaller wins). */
+export type ContextLimit = number | `${number}%` | { tokens?: number; percent?: number | `${number}%` }
+
 export interface CompressConfig {
+    model?: string
+    fallbackModels?: string[]
+    modelTimeoutMs?: number
     mode: CompressMode
     permission: Permission
     showCompression: boolean
     summaryBuffer: boolean
-    maxContextLimit: number | `${number}%`
-    minContextLimit: number | `${number}%`
-    modelMaxLimits?: Record<string, number | `${number}%`>
-    modelMinLimits?: Record<string, number | `${number}%`>
+    maxContextLimit: ContextLimit
+    minContextLimit: ContextLimit
+    modelMaxLimits?: Record<string, ContextLimit>
+    modelMinLimits?: Record<string, ContextLimit>
     nudgeFrequency: number
     iterationNudgeThreshold: number
     nudgeForce: "strong" | "soft"
@@ -122,6 +128,9 @@ export const VALID_CONFIG_KEYS = new Set([
     "manualMode.enabled",
     "manualMode.automaticStrategies",
     "compress",
+    "compress.model",
+    "compress.fallbackModels",
+    "compress.modelTimeoutMs",
     "compress.mode",
     "compress.permission",
     "compress.showCompression",
@@ -373,6 +382,48 @@ export function validateConfigTypes(config: Record<string, any>): ValidationErro
                 })
             }
 
+            const modelRef = /^[^\s/#]+\/[^\s#]+(?:#[^\s#]+)?$/
+            if (compress.model !== undefined && compress.mode === "message") {
+                errors.push({
+                    key: "compress.mode",
+                    expected: "range when compress.model is set",
+                    actual: "message",
+                })
+            }
+            if (
+                compress.model !== undefined &&
+                (typeof compress.model !== "string" || !modelRef.test(compress.model))
+            ) {
+                errors.push({
+                    key: "compress.model",
+                    expected: "provider/model#variant",
+                    actual: "invalid model reference",
+                })
+            }
+            if (
+                compress.fallbackModels !== undefined &&
+                (!Array.isArray(compress.fallbackModels) ||
+                    !compress.fallbackModels.every(
+                        (model: unknown) => typeof model === "string" && modelRef.test(model),
+                    ))
+            ) {
+                errors.push({
+                    key: "compress.fallbackModels",
+                    expected: "model reference array",
+                    actual: "invalid model references",
+                })
+            }
+            if (
+                compress.modelTimeoutMs !== undefined &&
+                (!Number.isSafeInteger(compress.modelTimeoutMs) || compress.modelTimeoutMs <= 0)
+            ) {
+                errors.push({
+                    key: "compress.modelTimeoutMs",
+                    expected: "positive integer milliseconds",
+                    actual: "invalid timeout",
+                })
+            }
+
             if (
                 compress.summaryBuffer !== undefined &&
                 typeof compress.summaryBuffer !== "boolean"
@@ -471,11 +522,13 @@ export function validateConfigTypes(config: Record<string, any>): ValidationErro
             ): void => {
                 const isValidNumber = typeof value === "number"
                 const isPercentString = typeof value === "string" && value.endsWith("%")
+                const isObjectLimit = typeof value === "object" && value !== null && !Array.isArray(value)
+                    && ((typeof (value as any).tokens === "number") || (typeof (value as any).percent === "number") || (typeof (value as any).percent === "string" && String((value as any).percent).endsWith("%")))
 
-                if (!isValidNumber && !isPercentString) {
+                if (!isValidNumber && !isPercentString && !isObjectLimit) {
                     errors.push({
                         key,
-                        expected: 'number | "${number}%"',
+                        expected: 'number | "${number}%" | { tokens?, percent? }',
                         actual: JSON.stringify(actualValue),
                     })
                 }
@@ -500,12 +553,13 @@ export function validateConfigTypes(config: Record<string, any>): ValidationErro
 
                 for (const [providerModelKey, limit] of Object.entries(limits)) {
                     const isValidNumber = typeof limit === "number"
-                    const isPercentString =
-                        typeof limit === "string" && /^\d+(?:\.\d+)?%$/.test(limit)
-                    if (!isValidNumber && !isPercentString) {
+                    const isObjectLimit = typeof limit === "object" && limit !== null && !Array.isArray(limit)
+                        && ((typeof (limit as any).tokens === "number") || (typeof (limit as any).percent === "number") || (typeof (limit as any).percent === "string" && /^\d+(?:\.\d+)?%$/.test(String((limit as any).percent))))
+                    const isPercentString = typeof limit === "string" && /^\d+(?:\.\d+)?%$/.test(limit)
+                    if (!isValidNumber && !isPercentString && !isObjectLimit) {
                         errors.push({
                             key: `${key}.${providerModelKey}`,
-                            expected: 'number | "${number}%"',
+                            expected: 'number | "${number}%" | { tokens?, percent? }',
                             actual: JSON.stringify(limit),
                         })
                     }
@@ -691,8 +745,8 @@ const defaultConfig: PluginConfig = {
         permission: "allow",
         showCompression: false,
         summaryBuffer: true,
-        maxContextLimit: 100000,
-        minContextLimit: 50000,
+        maxContextLimit: { tokens: 500000, percent: "60%" },
+        minContextLimit: { tokens: 200000, percent: "30%" },
         nudgeFrequency: 5,
         iterationNudgeThreshold: 15,
         nudgeForce: "soft",
@@ -801,7 +855,7 @@ function loadConfigFile(configPath: string): ConfigLoadResult {
     }
 
     try {
-        const parsed = parse(fileContent, undefined, { allowTrailingComma: true })
+        const parsed = jsonc.parse(fileContent, undefined, { allowTrailingComma: true })
         if (parsed === undefined || parsed === null) {
             return { data: null, parseError: "Config file is empty or invalid" }
         }
@@ -852,6 +906,9 @@ function mergeCompress(
 
     return {
         mode: override.mode ?? base.mode,
+        model: override.model ?? base.model,
+        fallbackModels: override.fallbackModels ?? base.fallbackModels,
+        modelTimeoutMs: override.modelTimeoutMs ?? base.modelTimeoutMs,
         permission: override.permission ?? base.permission,
         showCompression: override.showCompression ?? base.showCompression,
         summaryBuffer: override.summaryBuffer ?? base.summaryBuffer,
@@ -1015,3 +1072,6 @@ export function getConfig(ctx: ConfigContext): PluginConfig {
 
     return config
 }
+
+
+

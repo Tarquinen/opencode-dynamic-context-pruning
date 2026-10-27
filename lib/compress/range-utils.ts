@@ -281,6 +281,10 @@ function restoreSummary(summary: string): string {
     return withoutLeadingBreaks
         .replace(/(?:\r?\n)*<dcp-message-id>b\d+<\/dcp-message-id>\s*$/i, "")
         .replace(/(?:\r?\n)*@b[1-9]\d*@\s*$/i, "")
+        .replace(
+            /(?:\r?\n)*Originals: dcp_read\(\{"startId":"(?:b[1-9]\d*|@b[1-9]\d*@)"\}\)\s*$/,
+            "",
+        )
         .replace(/(?:\r?\n)+$/, "")
 }
 

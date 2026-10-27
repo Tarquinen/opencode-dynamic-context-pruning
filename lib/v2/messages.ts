@@ -6,6 +6,30 @@ type History = Awaited<ReturnType<Plugin.Context["session"]["context"]>>
 type Session = Awaited<ReturnType<Plugin.Context["session"]["get"]>>
 type Part = WithParts["parts"][number]
 
+// Old V2 hosts used data/mediaType; current hosts expose Media.Asset.
+function mediaFile(part: ContentPart) {
+    const media = part as Extract<ContentPart, { type: "media" }> & {
+        mediaType?: string
+        data?: string | Uint8Array
+    }
+    if (media.media)
+        return {
+            mime: media.media.mediaType,
+            url:
+                media.media.inline()?.dataUrl ??
+                (media.media.source.type === "url" ? media.media.source.url : ""),
+        }
+    return {
+        mime: media.mediaType ?? "application/octet-stream",
+        url:
+            typeof media.data === "string"
+                ? media.data
+                : media.data
+                  ? `data:${media.mediaType};base64,${Buffer.from(media.data).toString("base64")}`
+                  : "",
+    }
+}
+
 const emptyUsage = { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
 
 function info(id: string, role: string, session: Session, entry?: History[number]) {
@@ -71,7 +95,25 @@ export function history(entries: History, session: Session): WithParts[] {
             return [
                 {
                     info: info(entry.id, "user", session, entry),
-                    parts: [{ ...base, id: `${entry.id}:text`, type: "text", text }],
+                    parts: [
+                        { ...base, id: `${entry.id}:text`, type: "text", text },
+                        ...(entry.type === "user"
+                            ? (entry.files ?? []).map((file, index) => ({
+                                  ...base,
+                                  id: `${entry.id}:file:${index}`,
+                                  type: "file",
+                                  mime: file.mime,
+                                  filename: file.name,
+                                  url: file.data.startsWith("data:")
+                                      ? file.data
+                                      : file.data
+                                        ? `data:${file.mime};base64,${file.data}`
+                                        : file.source.type === "uri"
+                                          ? file.source.uri
+                                          : "",
+                              }))
+                            : []),
+                    ],
                 } as WithParts,
             ]
         }
@@ -117,8 +159,7 @@ export function project(native: Message[], entries: History, session: Session) {
                     ...base,
                     id: `${message.id}:${index}`,
                     type: "file",
-                    mime: part.mediaType,
-                    url: typeof part.data === "string" ? part.data : "",
+                    ...mediaFile(part),
                 }
             if (part.type === "tool-call") {
                 const result = results.get(part.id)

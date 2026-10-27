@@ -38,6 +38,7 @@ import { type HostPermissionSnapshot } from "./host-permissions"
 import { compressPermission, syncCompressPermissionState } from "./compress-permission"
 import { checkSession, ensureSessionInitialized, saveSessionState, syncToolCache } from "./state"
 import { cacheSystemPromptTokens } from "./ui/utils"
+import { READBACK_INSTRUCTIONS } from "./prompts/readback"
 
 const INTERNAL_AGENT_SIGNATURES = [
     "You are a title generator",
@@ -90,12 +91,15 @@ export function createSystemPromptHandler(
 
         prompts.reload()
         const runtimePrompts = prompts.getRuntimePrompts()
-        const newPrompt = renderSystemPrompt(
-            runtimePrompts,
-            buildProtectedToolsExtension(config.compress.protectedTools),
-            !!state.manualMode,
-            state.isSubAgent && config.experimental.allowSubAgents,
-        )
+        const newPrompt =
+            renderSystemPrompt(
+                runtimePrompts,
+                buildProtectedToolsExtension(config.compress.protectedTools),
+                !!state.manualMode,
+                state.isSubAgent && config.experimental.allowSubAgents,
+            ) +
+            "\n\n" +
+            READBACK_INSTRUCTIONS
         if (output.system.length > 0) {
             output.system[output.system.length - 1] += "\n\n" + newPrompt
         } else {

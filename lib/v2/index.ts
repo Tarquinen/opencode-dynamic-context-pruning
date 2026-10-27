@@ -32,6 +32,10 @@ import { history, project } from "./messages"
 import { analyzeContextTokens } from "../commands/context"
 import { buildStatsReport } from "../commands/stats"
 import { rpc } from "./rpc"
+import { MODEL_SELECTION_INSTRUCTIONS } from "../compress/model"
+import { nativeToolSignal } from "./cancellation"
+import { createSummarizer } from "./summarizer"
+import { createReadbackTool } from "../readback"
 
 // Extension point for future model-invisible V2 reports. Never use synthetic()
 // here: its text would enter the model's context, unlike V1 ignored messages.
@@ -62,6 +66,10 @@ export async function setup(ctx: Plugin.Context) {
         config.experimental.customPrompts,
         "compact",
     )
+    if (config.compress.model !== undefined) {
+        const original = prompts.getRuntimePrompts.bind(prompts)
+        prompts.getRuntimePrompts = () => ({ ...original(), system: MODEL_SELECTION_INSTRUCTIONS })
+    }
     const sessions = new Map<string, SessionState>()
     const queues = new Map<string, Promise<unknown>>()
     const limits = new Map<string, number>()
@@ -179,6 +187,7 @@ export async function setup(ctx: Plugin.Context) {
                 )
                 if (state.isSubAgent && !config.experimental.allowSubAgents) {
                     delete event.tools.compress
+                    delete event.tools.dcp_read
                     return
                 }
                 if (state.compressPermission === "deny") delete event.tools.compress
@@ -241,11 +250,70 @@ export async function setup(ctx: Plugin.Context) {
             }),
         )
 
+    const defineReadback = (state: SessionState) =>
+        createReadbackTool({
+            client,
+            state,
+            logger,
+            allowSubAgents: config.experimental.allowSubAgents,
+        })
+    const readback = defineReadback(createSessionState("compact"))
+    await ctx.tool.transform((editor) =>
+        editor.add({
+            name: "dcp_read",
+            description: readback.description,
+            input: tool.schema.object(readback.args),
+            options: { codemode: false, permission: "dcp_read" },
+            execute: (input, context) =>
+                serial(context.sessionID, async () => {
+                    const legacy = defineReadback(
+                        sessions.get(context.sessionID) ?? createSessionState("compact"),
+                    )
+                    const content = await legacy.execute(input, {
+                        sessionID: context.sessionID,
+                        messageID: context.messageID,
+                        agent: context.agent,
+                        directory: ctx.location.directory,
+                        worktree: ctx.location.directory,
+                        abort: nativeToolSignal(context) ?? new AbortController().signal,
+                        ask: async () => {
+                            if (!ctx.permission?.assert)
+                                throw new Error(
+                                    "DCP readback requires native permission.assert support",
+                                )
+                            await ctx.permission.assert({
+                                sessionID: context.sessionID,
+                                agent: context.agent,
+                                action: "dcp_read",
+                                resources: ["*"],
+                                source: {
+                                    type: "tool",
+                                    messageID: context.messageID,
+                                    id: context.id,
+                                },
+                            })
+                        },
+                        metadata: ({ title }: { title?: string }) => {
+                            void context.progress({ title })
+                        },
+                    })
+                    return { content: content as string }
+                }),
+        }),
+    )
+
     if (config.compress.permission !== "deny") {
         const define = (state: SessionState): ToolDefinition =>
-            (config.compress.mode === "message"
+            (config.compress.mode === "message" && config.compress.model === undefined
                 ? createCompressMessageTool
-                : createCompressRangeTool)({ client, state, logger, config, prompts })
+                : createCompressRangeTool)({
+                client,
+                state,
+                logger,
+                config,
+                prompts,
+                summarizer: createSummarizer(ctx),
+            })
         const definition = define(createSessionState("compact"))
         await ctx.tool.transform((editor) =>
             editor.add({
@@ -255,6 +323,12 @@ export async function setup(ctx: Plugin.Context) {
                 options: { codemode: false, permission: "compress" },
                 execute: (input, context) =>
                     serial(context.sessionID, async () => {
+                        const abort = nativeToolSignal(context)
+                        if (config.compress.model && !abort)
+                            throw new Error(
+                                "DCP model compression requires a native cancellable tool context (OpenCode 2.0.26+); original context retained",
+                            )
+                        abort?.throwIfAborted()
                         const { state } = await load(context.sessionID, context.agent)
                         allowed(state)
                         const started = Date.now()
@@ -266,7 +340,7 @@ export async function setup(ctx: Plugin.Context) {
                             agent: context.agent,
                             directory: ctx.location.directory,
                             worktree: ctx.location.directory,
-                            abort: new AbortController().signal,
+                            abort: abort ?? new AbortController().signal,
                             ask: async () => allowed(state),
                             metadata: ({ title }: { title?: string }) => {
                                 void context.progress({ title })

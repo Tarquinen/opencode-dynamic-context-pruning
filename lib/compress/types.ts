@@ -3,12 +3,38 @@ import type { Logger } from "../logger"
 import type { PromptStore } from "../prompts/store"
 import type { CompressionBlock, CompressionMode, SessionState, WithParts } from "../state"
 
+export interface SummaryImage {
+    ref: string
+    mime: string
+    uri: string
+}
+
 export interface ToolContext {
     client: any
     state: SessionState
     logger: Logger
     config: PluginConfig
     prompts: PromptStore
+    summarizer?: {
+        generate(
+            input: {
+                prompt: string
+                model: { providerID: string; id: string; variant?: string }
+                images?: SummaryImage[]
+                imageTokenLimit?: number
+            },
+            signal: AbortSignal,
+        ): Promise<{ text: string; imageTokens?: number }>
+        models(signal: AbortSignal): Promise<
+            Array<{
+                providerID: string
+                id: string
+                limit: { context: number; output: number }
+                variants?: Array<{ id: string }>
+                capabilities?: { input: readonly string[] }
+            }>
+        >
+    }
 }
 
 export interface CompressRangeEntry {

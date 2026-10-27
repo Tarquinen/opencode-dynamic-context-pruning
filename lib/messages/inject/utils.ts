@@ -1,5 +1,6 @@
 import type { SessionState, WithParts } from "../../state"
 import type { PluginConfig } from "../../config"
+import type { ContextLimit } from "../../config"
 import {
     appendGuidanceToDcpTag,
     buildCompressedBlockGuidance,
@@ -91,27 +92,36 @@ function resolveContextTokenLimit(
     modelId: string | undefined,
     threshold: "max" | "min",
 ): number | undefined {
-    const parseLimitValue = (limit: number | `${number}%` | undefined): number | undefined => {
+    const parseLimitValue = (limit: ContextLimit | undefined): number | undefined => {
         if (limit === undefined) {
             return undefined
+        }
+
+        const percentToTokens = (value: number | `${number}%` | undefined): number | undefined => {
+            if (value === undefined || state.modelContextLimit === undefined) {
+                return undefined
+            }
+            const parsedPercent = typeof value === "number" ? value : parseFloat(value.slice(0, -1))
+            if (isNaN(parsedPercent)) {
+                return undefined
+            }
+            const clampedPercent = Math.max(0, Math.min(100, Math.round(parsedPercent)))
+            return Math.round((clampedPercent / 100) * state.modelContextLimit)
         }
 
         if (typeof limit === "number") {
             return limit
         }
 
-        if (!limit.endsWith("%") || state.modelContextLimit === undefined) {
-            return undefined
+        if (typeof limit === "string") {
+            return limit.endsWith("%") ? percentToTokens(limit) : undefined
         }
 
-        const parsedPercent = parseFloat(limit.slice(0, -1))
-        if (isNaN(parsedPercent)) {
-            return undefined
-        }
-
-        const roundedPercent = Math.round(parsedPercent)
-        const clampedPercent = Math.max(0, Math.min(100, roundedPercent))
-        return Math.round((clampedPercent / 100) * state.modelContextLimit)
+        // Both forms: the smaller of the two wins.
+        const tokens = typeof limit.tokens === "number" ? limit.tokens : undefined
+        const percent = percentToTokens(limit.percent)
+        const candidates = [tokens, percent].filter((value): value is number => value !== undefined)
+        return candidates.length > 0 ? Math.min(...candidates) : undefined
     }
 
     const modelLimits =

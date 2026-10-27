@@ -5,6 +5,7 @@ import * as _anthropicTokenizer from "@anthropic-ai/tokenizer"
 const anthropicCountTokens = (_anthropicTokenizer.countTokens ??
     (_anthropicTokenizer as any).default?.countTokens) as typeof _anthropicTokenizer.countTokens
 import { getLastUserMessage } from "./messages/query"
+import { mediaTokenText } from "./media"
 
 export function getCurrentTokenUsage(state: SessionState, messages: WithParts[]): number {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -68,6 +69,7 @@ export function getCurrentParams(
 
 export function countTokens(text: string): number {
     if (!text) return 0
+    text = mediaTokenText(text)
     try {
         return anthropicCountTokens(text)
     } catch {
@@ -83,7 +85,7 @@ export function estimateTokensBatch(texts: string[]): number {
 export const COMPACTED_TOOL_OUTPUT_PLACEHOLDER = "[Old tool result content cleared]"
 
 function stringifyToolContent(value: unknown): string {
-    return typeof value === "string" ? value : JSON.stringify(value)
+    return mediaTokenText(value)
 }
 
 export function extractCompletedToolOutput(part: any): string | undefined {
