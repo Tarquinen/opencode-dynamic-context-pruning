@@ -807,3 +807,51 @@ test("manual mode persisted setting refreshes server session state", async () =>
     await refreshManualMode(state, sessionId, logger, true)
     assert.equal(state.manualMode, false)
 })
+
+test("chat message transform resolves a percentage threshold before the system prompt hook runs", async () => {
+    const state = createSessionState()
+    const config = buildConfig("allow")
+    config.compress.minContextLimit = "55%"
+    config.compress.maxContextLimit = "80%"
+    const handler = createChatMessageTransformHandler(
+        {
+            session: { get: async () => ({}) },
+            config: {
+                providers: async () => ({
+                    data: {
+                        providers: [
+                            {
+                                id: "anthropic",
+                                models: { "claude-x": { limit: { context: 200000 } } },
+                            },
+                        ],
+                    },
+                }),
+            },
+        } as any,
+        state,
+        new Logger(false),
+        config,
+        buildPromptStore(),
+        { global: undefined, agents: {} },
+    )
+    const user = (id: string) => {
+        const message = buildMessage(id, "user", "short question")
+        ;(message.info as any).model = { providerID: "anthropic", modelID: "claude-x" }
+        return message
+    }
+
+    await handler(
+        {},
+        {
+            messages: [
+                user("user-1"),
+                buildMessage("assistant-1", "assistant", "short answer"),
+                user("user-2"),
+            ],
+        },
+    )
+
+    assert.equal(state.modelContextLimit, 200000)
+    assert.equal(state.nudges.turnNudgeAnchors.size, 0)
+})

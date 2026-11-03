@@ -38,6 +38,7 @@ import { type HostPermissionSnapshot } from "./host-permissions"
 import { compressPermission, syncCompressPermissionState } from "./compress-permission"
 import { checkSession, ensureSessionInitialized, saveSessionState, syncToolCache } from "./state"
 import { cacheSystemPromptTokens } from "./ui/utils"
+import { getModelInfo } from "./messages/inject/utils"
 
 const INTERNAL_AGENT_SIGNATURES = [
     "You are a title generator",
@@ -104,6 +105,23 @@ export function createSystemPromptHandler(
     }
 }
 
+// Messages are transformed before the system prompt hook reports the model limit,
+// so the first request of a fresh process would otherwise see no limit and nudge.
+async function lookupModelContextLimit(
+    client: any,
+    messages: WithParts[],
+): Promise<number | undefined> {
+    const { providerId, modelId } = getModelInfo(messages)
+    if (!providerId || !modelId) return undefined
+    try {
+        const response = await client.config.providers()
+        const provider = response?.data?.providers?.find((p: any) => p.id === providerId)
+        return provider?.models?.[modelId]?.limit?.context || undefined
+    } catch {
+        return undefined
+    }
+}
+
 export function createChatMessageTransformHandler(
     client: any,
     state: SessionState,
@@ -123,6 +141,10 @@ export function createChatMessageTransformHandler(
         }
 
         await checkSession(client, state, logger, output.messages, config.manualMode.enabled)
+
+        if (state.modelContextLimit === undefined) {
+            state.modelContextLimit = await lookupModelContextLimit(client, output.messages)
+        }
 
         syncCompressPermissionState(state, config, hostPermissions, output.messages)
 
