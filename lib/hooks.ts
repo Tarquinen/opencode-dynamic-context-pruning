@@ -119,7 +119,7 @@ export function createChatMessageTransformHandler(
     prompts: PromptStore,
     hostPermissions: HostPermissionSnapshot,
 ) {
-    return async (input: {}, output: { messages: WithParts[] }) => {
+    const transform = async (input: {}, output: { messages: WithParts[] }) => {
         const receivedMessages = Array.isArray(output.messages) ? output.messages.length : 0
         const messages = filterMessagesInPlace(output.messages)
         if (messages.length !== receivedMessages) {
@@ -212,6 +212,18 @@ export function createChatMessageTransformHandler(
         if (state.sessionId) {
             await logger.saveContext(state.sessionId, output.messages)
         }
+    }
+
+    let queue: Promise<unknown> = Promise.resolve()
+
+    return (input: {}, output: { messages: WithParts[] }): Promise<void> => {
+        const run = () => transform(input, output)
+        const result = queue.then(run, run)
+        queue = result.then(
+            () => undefined,
+            () => undefined,
+        )
+        return result
     }
 }
 
