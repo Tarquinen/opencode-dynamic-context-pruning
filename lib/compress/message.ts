@@ -13,6 +13,7 @@ import {
     wrapCompressedSummary,
 } from "./state"
 import type { CompressMessageToolArgs } from "./types"
+import type { ProtectedContent } from "../state"
 
 function buildSchema(format: IdFormat) {
     return {
@@ -77,6 +78,7 @@ export function createCompressMessageTool(ctx: ToolContext): ReturnType<typeof t
             const preparedPlans: Array<{
                 plan: (typeof plans)[number]
                 summaryWithTools: string
+                protectedContent: ProtectedContent[]
             }> = []
 
             for (const plan of plans) {
@@ -92,7 +94,7 @@ export function createCompressMessageTool(ctx: ToolContext): ReturnType<typeof t
                     ctx.client,
                     ctx.state,
                     ctx.config.experimental.allowSubAgents,
-                    summaryWithPromptInfo,
+                    summaryWithPromptInfo.summaryText,
                     plan.selection,
                     searchContext,
                     ctx.config.compress.protectedTools,
@@ -101,13 +103,14 @@ export function createCompressMessageTool(ctx: ToolContext): ReturnType<typeof t
 
                 preparedPlans.push({
                     plan,
-                    summaryWithTools,
+                    summaryWithTools: summaryWithTools.summaryText,
+                    protectedContent: summaryWithTools.protectedContent,
                 })
             }
 
             const runId = allocateRunId(ctx.state)
 
-            for (const { plan, summaryWithTools } of preparedPlans) {
+            for (const { plan, summaryWithTools, protectedContent } of preparedPlans) {
                 const blockId = allocateBlockId(ctx.state)
                 const storedSummary = wrapCompressedSummary(
                     blockId,
@@ -134,6 +137,7 @@ export function createCompressMessageTool(ctx: ToolContext): ReturnType<typeof t
                     blockId,
                     storedSummary,
                     [],
+                    protectedContent,
                 )
 
                 notifications.push({

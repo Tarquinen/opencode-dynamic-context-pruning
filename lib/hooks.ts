@@ -38,6 +38,13 @@ import { type HostPermissionSnapshot } from "./host-permissions"
 import { compressPermission, syncCompressPermissionState } from "./compress-permission"
 import { checkSession, ensureSessionInitialized, saveSessionState, syncToolCache } from "./state"
 import { cacheSystemPromptTokens } from "./ui/utils"
+import {
+    buildContextSnapshot,
+    collectUncoveredToolOutputs,
+    computeCoverage,
+    estimateMessageSetStats,
+} from "./context/accounting"
+import { getModelInfo } from "./messages/inject/utils"
 
 const INTERNAL_AGENT_SIGNATURES = [
     "You are a title generator",
@@ -112,7 +119,7 @@ export function createChatMessageTransformHandler(
     prompts: PromptStore,
     hostPermissions: HostPermissionSnapshot,
 ) {
-    return async (input: {}, output: { messages: WithParts[] }) => {
+    const transform = async (input: {}, output: { messages: WithParts[] }) => {
         const receivedMessages = Array.isArray(output.messages) ? output.messages.length : 0
         const messages = filterMessagesInPlace(output.messages)
         if (messages.length !== receivedMessages) {
@@ -122,7 +129,14 @@ export function createChatMessageTransformHandler(
             })
         }
 
-        await checkSession(client, state, logger, output.messages, config.manualMode.enabled)
+        await checkSession(
+            client,
+            state,
+            logger,
+            output.messages,
+            config.manualMode.enabled,
+            config,
+        )
 
         syncCompressPermissionState(state, config, hostPermissions, output.messages)
 
@@ -136,6 +150,14 @@ export function createChatMessageTransformHandler(
         syncCompressionBlocks(state, logger, output.messages)
         syncToolCache(state, config, logger, output.messages)
         buildToolIdList(state, output.messages)
+
+        const accountingEnabled = config.experimental.contextAccounting === true
+        const rawStats = accountingEnabled ? estimateMessageSetStats(output.messages) : undefined
+        const coverage = accountingEnabled ? computeCoverage(state, output.messages) : undefined
+        const uncoveredTools = accountingEnabled
+            ? collectUncoveredToolOutputs(state, output.messages)
+            : undefined
+
         prune(state, logger, config, output.messages)
         await injectExtendedSubAgentResults(
             client,
@@ -158,9 +180,50 @@ export function createChatMessageTransformHandler(
         applyPendingManualTrigger(state, output.messages, logger)
         stripStaleMetadata(output.messages)
 
+        if (accountingEnabled && rawStats && coverage && uncoveredTools) {
+            const transformedStats = estimateMessageSetStats(output.messages)
+            const { providerId, modelId } = getModelInfo(output.messages)
+            state.lastContextSnapshot = buildContextSnapshot(
+                state,
+                config,
+                providerId,
+                modelId,
+                rawStats,
+                transformedStats,
+                coverage,
+                uncoveredTools,
+                output.messages,
+            )
+            logger.debug("Context accounting snapshot", {
+                rawMessages: state.lastContextSnapshot.rawMessageCount,
+                rawTokens: state.lastContextSnapshot.rawEstimatedTokens,
+                transformedMessages: state.lastContextSnapshot.transformedMessageCount,
+                transformedTokens: state.lastContextSnapshot.transformedEstimatedTokens,
+                activeBlocks: state.lastContextSnapshot.activeBlockCount,
+                uncoveredTokens: state.lastContextSnapshot.uncoveredMessageTokens,
+                reportedTotal: state.lastContextSnapshot.reported.total,
+                overMax: state.lastContextSnapshot.overMaxLimit,
+                overMin: state.lastContextSnapshot.overMinLimit,
+            })
+        } else if (accountingEnabled) {
+            state.lastContextSnapshot = undefined
+        }
+
         if (state.sessionId) {
             await logger.saveContext(state.sessionId, output.messages)
         }
+    }
+
+    let queue: Promise<unknown> = Promise.resolve()
+
+    return (input: {}, output: { messages: WithParts[] }): Promise<void> => {
+        const run = () => transform(input, output)
+        const result = queue.then(run, run)
+        queue = result.then(
+            () => undefined,
+            () => undefined,
+        )
+        return result
     }
 }
 
@@ -193,6 +256,7 @@ export function createCommandExecuteHandler(
                 logger,
                 messages,
                 config.manualMode.enabled,
+                config,
             )
 
             syncCompressPermissionState(state, config, hostPermissions, messages)
@@ -201,6 +265,8 @@ export function createCommandExecuteHandler(
             if (effectivePermission === "deny") {
                 return
             }
+
+            assignMessageRefs(state, messages)
 
             const args = (input.arguments || "").trim().split(/\s+/).filter(Boolean)
             const isCompressCommand = input.command === "dcp-compress"
@@ -335,11 +401,12 @@ export function createEventHandler(state: SessionState, logger: Logger) {
             })
             return
         }
-
         if (part.state.status === "completed") {
             if (typeof part.callID !== "string" || typeof part.messageID !== "string") {
                 return
             }
+
+            state.lastDcpCompression = Date.now()
 
             const key = buildCompressionTimingKey(part.messageID, part.callID)
             const start = consumeCompressionStart(state, part.messageID, part.callID)

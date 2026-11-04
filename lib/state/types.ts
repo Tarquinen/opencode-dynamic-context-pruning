@@ -1,4 +1,5 @@
 import type { CompressionTimingState } from "../compress/timing"
+import type { ContextAccountingSnapshot } from "../context/accounting"
 import type { IdFormat } from "../message-ids"
 import { Message, Part } from "@opencode-ai/sdk/v2"
 
@@ -32,6 +33,13 @@ export interface PrunedMessageEntry {
 
 export type CompressionMode = "range" | "message"
 
+export type ProtectedContentKind = "tool" | "user" | "prompt"
+
+export interface ProtectedContent {
+    kind: ProtectedContentKind
+    text: string
+}
+
 export interface CompressionBlock {
     blockId: number
     runId: number
@@ -59,6 +67,7 @@ export interface CompressionBlock {
     deactivatedAt?: number
     deactivatedByBlockId?: number
     summary: string
+    protectedContent?: ProtectedContent[]
 }
 
 export interface PruneMessagesState {
@@ -108,7 +117,9 @@ export interface SessionState {
     toolIdList: string[]
     messageIds: MessageIdState
     lastCompaction: number
+    lastDcpCompression: number
     currentTurn: number
     modelContextLimit: number | undefined
     systemPromptTokens: number | undefined
+    lastContextSnapshot?: import("../context/accounting").ContextAccountingSnapshot
 }

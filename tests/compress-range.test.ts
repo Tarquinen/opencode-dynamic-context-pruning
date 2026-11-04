@@ -49,6 +49,7 @@ function buildConfig(): PluginConfig {
             nudgeFrequency: 5,
             iterationNudgeThreshold: 15,
             nudgeForce: "soft",
+            pollCooldown: 3,
             protectedTools: [],
             protectTags: false,
             protectUserMessages: false,

@@ -1,5 +1,6 @@
 import type { SessionState, ToolParameterEntry, WithParts } from "./types"
 import type { Logger } from "../logger"
+import type { PluginConfig } from "../config"
 import { applyPendingCompressionDurations } from "../compress/timing"
 import { loadManualModeSetting, loadSessionState, saveSessionState } from "./persistence"
 import {
@@ -12,6 +13,7 @@ import {
     loadPruneMap,
     collectTurnNudgeAnchors,
 } from "./utils"
+import { replayCompletedCompressions } from "./recovery"
 import { getLastUserMessage } from "../messages/query"
 import type { IdFormat } from "../message-ids"
 
@@ -21,6 +23,7 @@ export const checkSession = async (
     logger: Logger,
     messages: WithParts[],
     manualModeDefault: boolean,
+    config?: PluginConfig,
 ): Promise<void> => {
     const lastUserMessage = getLastUserMessage(messages)
     if (!lastUserMessage) {
@@ -39,6 +42,7 @@ export const checkSession = async (
                 logger,
                 messages,
                 manualModeDefault,
+                config,
             )
         } catch (err: any) {
             logger.error("Failed to initialize session state", { error: err.message })
@@ -99,6 +103,7 @@ export function createSessionState(idFormat: IdFormat = "xml"): SessionState {
         },
         lastCompaction: 0,
         currentTurn: 0,
+        lastDcpCompression: 0,
         modelContextLimit: undefined,
         systemPromptTokens: undefined,
     }
@@ -133,6 +138,7 @@ export function resetSessionState(state: SessionState): void {
     }
     state.lastCompaction = 0
     state.currentTurn = 0
+    state.lastDcpCompression = 0
     state.modelContextLimit = undefined
     state.systemPromptTokens = undefined
 }
@@ -144,6 +150,7 @@ export async function ensureSessionInitialized(
     logger: Logger,
     messages: WithParts[],
     manualModeEnabled: boolean,
+    config?: PluginConfig,
 ): Promise<void> {
     if (state.sessionId === sessionId) {
         return
@@ -166,6 +173,9 @@ export async function ensureSessionInitialized(
 
     const persisted = await loadSessionState(sessionId, logger)
     if (persisted === null) {
+        if (config?.experimental.recoverInherited === true) {
+            await replayCompletedCompressions(client, state, logger, config, messages)
+        }
         return
     }
 
@@ -186,6 +196,16 @@ export async function ensureSessionInitialized(
     state.stats = {
         pruneTokenCounter: persisted.stats?.pruneTokenCounter || 0,
         totalPruneTokens: persisted.stats?.totalPruneTokens || 0,
+    }
+    if (typeof persisted.lastCompaction === "number" && persisted.lastCompaction > 0) {
+        state.lastCompaction = persisted.lastCompaction
+    }
+    if (typeof persisted.lastDcpCompression === "number" && persisted.lastDcpCompression > 0) {
+        state.lastDcpCompression = persisted.lastDcpCompression
+    }
+
+    if (config?.experimental.recoverInherited === true) {
+        await replayCompletedCompressions(client, state, logger, config, messages)
     }
 
     const applied = applyPendingCompressionDurations(state)

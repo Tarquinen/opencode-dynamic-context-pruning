@@ -33,10 +33,11 @@ function getTriggerPrompt(
     state: SessionState,
     config: PluginConfig,
     userFocus?: string,
+    messages?: WithParts[],
 ): string {
     const base = COMPRESS_TRIGGER_PROMPT
     const compressedBlockGuidance =
-        config.compress.mode === "message" ? "" : buildCompressedBlockGuidance(state)
+        config.compress.mode === "message" ? "" : buildCompressedBlockGuidance(state, messages)
 
     const sections = [base, compressedBlockGuidance]
     if (userFocus && userFocus.trim().length > 0) {
@@ -87,7 +88,7 @@ export async function handleManualTriggerCommand(
     tool: "compress",
     userFocus?: string,
 ): Promise<string | null> {
-    return getTriggerPrompt(tool, ctx.state, ctx.config, userFocus)
+    return getTriggerPrompt(tool, ctx.state, ctx.config, userFocus, ctx.messages)
 }
 
 export function applyPendingManualTrigger(

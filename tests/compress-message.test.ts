@@ -37,6 +37,8 @@ function buildConfig(): PluginConfig {
         },
         experimental: {
             allowSubAgents: false,
+            contextAccounting: false,
+            recoverInherited: false,
             customPrompts: false,
         },
         protectedFilePatterns: [],
@@ -49,6 +51,7 @@ function buildConfig(): PluginConfig {
             nudgeFrequency: 5,
             iterationNudgeThreshold: 15,
             nudgeForce: "soft",
+            pollCooldown: 3,
             protectedTools: ["task"],
             protectTags: false,
             protectUserMessages: false,

@@ -2,12 +2,14 @@ import type {
     CompressionBlock,
     PruneMessagesState,
     PrunedMessageEntry,
+    ProtectedContent,
     SessionState,
     WithParts,
 } from "./types"
 import { isIgnoredUserMessage, messageHasCompress } from "../messages/query"
 import { isMessageWithInfo } from "../messages/shape"
 import { countTokens } from "../token-utils"
+import { parseProtectedContentFromSummary } from "../compress/protected-content"
 
 export const isMessageCompacted = (state: SessionState, msg: WithParts): boolean => {
     if (!isMessageWithInfo(msg)) {
@@ -186,6 +188,26 @@ export function loadPruneMessagesState(
                     ? [...new Set(value.filter((item): item is string => typeof item === "string"))]
                     : []
 
+            const rawSummary = typeof block.summary === "string" ? block.summary : ""
+            const rawProtectedContent = Array.isArray(block.protectedContent)
+                ? block.protectedContent
+                : undefined
+            const migratedProtectedContent: ProtectedContent[] = rawProtectedContent
+                ? rawProtectedContent
+                      .filter(
+                          (entry): entry is ProtectedContent =>
+                              !!entry &&
+                              typeof entry === "object" &&
+                              (entry.kind === "tool" ||
+                                  entry.kind === "user" ||
+                                  entry.kind === "prompt") &&
+                              typeof entry.text === "string",
+                      )
+                      .map((entry) => ({ kind: entry.kind, text: entry.text }))
+                : rawSummary
+                  ? parseProtectedContentFromSummary(rawSummary)
+                  : []
+
             state.blocksById.set(blockId, {
                 blockId,
                 runId:
@@ -242,7 +264,8 @@ export function loadPruneMessagesState(
                     Number.isInteger(block.deactivatedByBlockId)
                         ? block.deactivatedByBlockId
                         : undefined,
-                summary: typeof block.summary === "string" ? block.summary : "",
+                summary: rawSummary,
+                protectedContent: migratedProtectedContent,
             })
         }
     }

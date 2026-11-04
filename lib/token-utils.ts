@@ -2,9 +2,24 @@ import { SessionState, WithParts } from "./state"
 import { AssistantMessage, UserMessage } from "@opencode-ai/sdk/v2"
 import { Logger } from "./logger"
 import * as _anthropicTokenizer from "@anthropic-ai/tokenizer"
-const anthropicCountTokens = (_anthropicTokenizer.countTokens ??
-    (_anthropicTokenizer as any).default?.countTokens) as typeof _anthropicTokenizer.countTokens
+const anthropicGetTokenizer = (_anthropicTokenizer.getTokenizer ??
+    (_anthropicTokenizer as any).default?.getTokenizer) as () => ReturnType<
+    typeof _anthropicTokenizer.getTokenizer
+>
 import { getLastUserMessage } from "./messages/query"
+
+let sharedTokenizer: ReturnType<typeof anthropicGetTokenizer> | null = null
+
+function getSharedTokenizer(): ReturnType<typeof anthropicGetTokenizer> {
+    if (sharedTokenizer === null) {
+        sharedTokenizer = anthropicGetTokenizer()
+    }
+    return sharedTokenizer
+}
+
+export function resetSharedTokenizerForTests(): void {
+    sharedTokenizer = null
+}
 
 export function getCurrentTokenUsage(state: SessionState, messages: WithParts[]): number {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -35,6 +50,45 @@ export function getCurrentTokenUsage(state: SessionState, messages: WithParts[])
     }
 
     return 0
+}
+
+/**
+ * Find the timestamp of the newest assistant message that carries provider
+ * reported token usage. Returns 0 if none exists.
+ */
+export function getLastReportedTokenTimestamp(messages: WithParts[]): number {
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i]
+        if (msg.info.role !== "assistant") {
+            continue
+        }
+        const assistantInfo = msg.info as AssistantMessage
+        if ((assistantInfo.tokens?.output || 0) > 0) {
+            return msg.info.time.created
+        }
+    }
+    return 0
+}
+
+/**
+ * True when the newest provider-reported token total describes a request that
+ * was sent before the last DCP compression completed. After a DCP compression
+ * the pruned view is smaller than what the stale total reports, so treating the
+ * stale total as current would re-trigger an emergency nudge without new
+ * evidence.
+ */
+export function isReportedTokensStaleAfterDcpCompression(
+    state: SessionState,
+    messages: WithParts[],
+): boolean {
+    if (!state.lastDcpCompression || state.lastDcpCompression <= 0) {
+        return false
+    }
+    const lastReported = getLastReportedTokenTimestamp(messages)
+    if (!lastReported) {
+        return false
+    }
+    return lastReported < state.lastDcpCompression
 }
 
 export function getCurrentParams(
@@ -69,8 +123,11 @@ export function getCurrentParams(
 export function countTokens(text: string): number {
     if (!text) return 0
     try {
-        return anthropicCountTokens(text)
+        const tokenizer = getSharedTokenizer()
+        const encoded = tokenizer.encode(text.normalize("NFKC"), "all")
+        return encoded.length
     } catch {
+        sharedTokenizer = null
         return Math.round(text.length / 4)
     }
 }

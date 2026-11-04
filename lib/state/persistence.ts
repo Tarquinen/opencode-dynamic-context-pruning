@@ -39,6 +39,8 @@ export interface PersistedSessionState {
     prune: PersistedPrune
     nudges: PersistedNudges
     stats: SessionStats
+    lastCompaction?: number
+    lastDcpCompression?: number
     lastUpdated: string
 }
 
@@ -100,6 +102,8 @@ export async function saveSessionState(
                 iterationNudgeAnchors: Array.from(sessionState.nudges.iterationNudgeAnchors),
             },
             stats: sessionState.stats,
+            lastCompaction: sessionState.lastCompaction || undefined,
+            lastDcpCompression: sessionState.lastDcpCompression || undefined,
             lastUpdated: new Date().toISOString(),
         }
 

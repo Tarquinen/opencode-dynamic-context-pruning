@@ -65,6 +65,7 @@ export async function prepareSession(
         ctx.logger,
         rawMessages,
         ctx.config.manualMode.enabled,
+        ctx.config,
     )
 
     assignMessageRefs(ctx.state, rawMessages)
@@ -85,6 +86,10 @@ export async function finalizeSession(
     entries: NotificationEntry[],
     batchTopic: string | undefined,
 ): Promise<void> {
+    if (entries.length > 0) {
+        ctx.state.lastDcpCompression = Date.now()
+    }
+
     if (ctx.state.manualMode === "compress-pending") {
         ctx.state.manualMode = false
         await refreshManualMode(

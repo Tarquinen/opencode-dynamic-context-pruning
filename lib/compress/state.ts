@@ -1,4 +1,4 @@
-import type { CompressionBlock, PruneMessagesState, SessionState } from "../state"
+import type { CompressionBlock, PruneMessagesState, ProtectedContent, SessionState } from "../state"
 import { formatBlockRef, formatMessageIdTag, type IdFormat } from "../message-ids"
 import type { AppliedCompressionResult, CompressionStateInput, SelectionResolution } from "./types"
 
@@ -71,6 +71,7 @@ export function applyCompressionState(
     blockId: number,
     summary: string,
     consumedBlockIds: number[],
+    protectedContent: ProtectedContent[] = [],
 ): AppliedCompressionResult {
     const messagesState = state.prune.messages
     const consumed = [...new Set(consumedBlockIds.filter((id) => Number.isInteger(id) && id > 0))]
@@ -138,6 +139,7 @@ export function applyCompressionState(
         effectiveToolIds: [...effectiveToolIds],
         createdAt,
         summary,
+        protectedContent,
     }
 
     messagesState.blocksById.set(blockId, block)

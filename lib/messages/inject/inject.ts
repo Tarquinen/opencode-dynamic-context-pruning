@@ -28,6 +28,7 @@ import {
     getNudgeFrequency,
     getModelInfo,
     isContextOverLimits,
+    isPollOnlyTurn,
 } from "./utils"
 
 export const injectCompressNudges = (
@@ -74,6 +75,10 @@ export const injectCompressNudges = (
         messages,
     )
 
+    // Poll-only turns (repeated tool calls without new user input) should not
+    // re-trigger the emergency max-context nudge on every iteration.
+    const pollOnly = isPollOnlyTurn(state, messages, config.compress.pollCooldown)
+
     if (!overMinLimit) {
         const hadTurnAnchors = state.nudges.turnNudgeAnchors.size > 0
         const hadIterationAnchors = state.nudges.iterationNudgeAnchors.size > 0
@@ -86,7 +91,7 @@ export const injectCompressNudges = (
     }
 
     if (overMaxLimit) {
-        if (lastMessage) {
+        if (lastMessage && !pollOnly) {
             const interval = getNudgeFrequency(config)
             const added = addAnchor(
                 state.nudges.contextLimitAnchors,

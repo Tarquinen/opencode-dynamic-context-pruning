@@ -1,7 +1,13 @@
 import type { PluginConfig } from "../config"
 import type { Logger } from "../logger"
 import type { PromptStore } from "../prompts/store"
-import type { CompressionBlock, CompressionMode, SessionState, WithParts } from "../state"
+import type {
+    CompressionBlock,
+    CompressionMode,
+    ProtectedContent,
+    SessionState,
+    WithParts,
+} from "../state"
 
 export interface ToolContext {
     client: any
@@ -86,6 +92,7 @@ export interface ParsedBlockPlaceholder {
 export interface InjectedSummaryResult {
     expandedSummary: string
     consumedBlockIds: number[]
+    protectedContent: ProtectedContent[]
 }
 
 export interface AppliedCompressionResult {

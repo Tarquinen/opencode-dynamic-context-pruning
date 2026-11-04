@@ -1,6 +1,7 @@
-import type { CompressionBlock, SessionState } from "../state"
+import type { CompressionBlock, ProtectedContent, SessionState } from "../state"
 import { resolveAnchorMessageId, resolveBoundaryIds, resolveSelection } from "./search"
 import type { IdFormat } from "../message-ids"
+import { getBlockProtectedContent, renderProtectedContent } from "./protected-content"
 import type {
     BoundaryReference,
     CompressRangeToolArgs,
@@ -11,6 +12,12 @@ import type {
 } from "./types"
 
 const BLOCK_PLACEHOLDER_REGEX = /\(b(\d+)\)|\{block_(\d+)\}/gi
+
+const CONDENSED_BLOCK_REF_PREFIX = "[condensed block"
+
+function formatCondensedBlockRef(blockId: number): string {
+    return `${CONDENSED_BLOCK_REF_PREFIX} b${blockId}]`
+}
 
 export function validateArgs(args: CompressRangeToolArgs): void {
     if (typeof args.topic !== "string" || args.topic.trim().length === 0) {
@@ -171,17 +178,46 @@ export function validateSummaryPlaceholders(
     return strictRequiredIds.filter((id) => !keptPlaceholderIds.has(id))
 }
 
+function collectBlockProtectedContent(
+    blockIds: number[],
+    summaryByBlockId: Map<number, CompressionBlock>,
+): ProtectedContent[] {
+    const entries: ProtectedContent[] = []
+    for (const blockId of blockIds) {
+        const target = summaryByBlockId.get(blockId)
+        if (!target) {
+            continue
+        }
+        entries.push(...getBlockProtectedContent(target))
+    }
+
+    const seen = new Set<string>()
+    const deduped: ProtectedContent[] = []
+    for (const entry of entries) {
+        const key = `${entry.kind}:${entry.text}`
+        if (seen.has(key)) {
+            continue
+        }
+        seen.add(key)
+        deduped.push(entry)
+    }
+    return deduped
+}
+
 export function injectBlockPlaceholders(
     summary: string,
     placeholders: ParsedBlockPlaceholder[],
     summaryByBlockId: Map<number, CompressionBlock>,
     startReference: BoundaryReference,
     endReference: BoundaryReference,
+    condense = false,
 ): InjectedSummaryResult {
     let cursor = 0
     let expanded = summary
     const consumed: number[] = []
     const consumedSeen = new Set<number>()
+    const preservedSections: string[] = []
+    const preservedProtected: ProtectedContent[] = []
 
     if (placeholders.length > 0) {
         expanded = ""
@@ -192,7 +228,13 @@ export function injectBlockPlaceholders(
             }
 
             expanded += summary.slice(cursor, placeholder.startIndex)
-            expanded += restoreSummary(target.summary)
+            if (condense) {
+                expanded += formatCondensedBlockRef(placeholder.blockId)
+                preservedProtected.push(...getBlockProtectedContent(target))
+            } else {
+                expanded += restoreSummary(target.summary)
+                preservedProtected.push(...getBlockProtectedContent(target))
+            }
             cursor = placeholder.endIndex
 
             if (!consumedSeen.has(placeholder.blockId)) {
@@ -211,6 +253,9 @@ export function injectBlockPlaceholders(
         summaryByBlockId,
         consumed,
         consumedSeen,
+        condense,
+        preservedSections,
+        preservedProtected,
     )
     expanded = injectBoundarySummary(
         expanded,
@@ -219,11 +264,26 @@ export function injectBlockPlaceholders(
         summaryByBlockId,
         consumed,
         consumedSeen,
+        condense,
+        preservedSections,
+        preservedProtected,
     )
+
+    if (preservedSections.length > 0) {
+        expanded = `${expanded}\n\n${preservedSections.join("\n\n")}`
+    } else if (condense && preservedProtected.length > 0) {
+        const rendered = renderProtectedContent(preservedProtected)
+        if (rendered) {
+            expanded = `${expanded}\n\n${rendered}`
+        }
+    }
+
+    const protectedContent = collectBlockProtectedContent(consumed, summaryByBlockId)
 
     return {
         expandedSummary: expanded,
         consumedBlockIds: consumed,
+        protectedContent,
     }
 }
 
@@ -233,11 +293,13 @@ export function appendMissingBlockSummaries(
     summaryByBlockId: Map<number, CompressionBlock>,
     consumedBlockIds: number[],
     format: IdFormat = "xml",
+    condense = false,
 ): InjectedSummaryResult {
     const consumedSeen = new Set<number>(consumedBlockIds)
     const consumed = [...consumedBlockIds]
 
     const missingSummaries: string[] = []
+    const protectedEntries: ProtectedContent[] = []
     for (const blockId of missingBlockIds) {
         if (consumedSeen.has(blockId)) {
             continue
@@ -249,7 +311,18 @@ export function appendMissingBlockSummaries(
         }
 
         const label = format === "compact" ? `compressed block ${blockId}` : `(b${blockId})`
-        missingSummaries.push(`\n### ${label}\n${restoreSummary(target.summary)}`)
+        const blockProtected = getBlockProtectedContent(target)
+        protectedEntries.push(...blockProtected)
+
+        if (condense) {
+            if (blockProtected.length > 0) {
+                missingSummaries.push(`\n### ${label}\n${renderProtectedContent(blockProtected)}`)
+            } else {
+                missingSummaries.push(`\n### ${label}\n${formatCondensedBlockRef(blockId)}`)
+            }
+        } else {
+            missingSummaries.push(`\n### ${label}\n${restoreSummary(target.summary)}`)
+        }
         consumedSeen.add(blockId)
         consumed.push(blockId)
     }
@@ -258,6 +331,7 @@ export function appendMissingBlockSummaries(
         return {
             expandedSummary: summary,
             consumedBlockIds: consumed,
+            protectedContent: protectedEntries,
         }
     }
 
@@ -267,6 +341,7 @@ export function appendMissingBlockSummaries(
     return {
         expandedSummary: summary + heading + missingSummaries.join(""),
         consumedBlockIds: consumed,
+        protectedContent: protectedEntries,
     }
 }
 
@@ -291,6 +366,9 @@ function injectBoundarySummary(
     summaryByBlockId: Map<number, CompressionBlock>,
     consumed: number[],
     consumedSeen: Set<number>,
+    condense = false,
+    preservedSections: string[] = [],
+    preservedProtected: ProtectedContent[] = [],
 ): string {
     if (reference.kind !== "compressed-block" || reference.blockId === undefined) {
         return summary
@@ -304,6 +382,18 @@ function injectBoundarySummary(
         throw new Error(`Compressed block not found: (b${reference.blockId})`)
     }
 
+    if (condense) {
+        preservedProtected.push(...getBlockProtectedContent(target))
+        const injectedBody = formatCondensedBlockRef(reference.blockId)
+        const left = position === "start" ? injectedBody.trim() : summary.trim()
+        const right = position === "start" ? summary.trim() : injectedBody.trim()
+        const next = !left ? right : !right ? left : `${left}\n\n${right}`
+        consumedSeen.add(reference.blockId)
+        consumed.push(reference.blockId)
+        return next
+    }
+
+    preservedProtected.push(...getBlockProtectedContent(target))
     const injectedBody = restoreSummary(target.summary)
     const left = position === "start" ? injectedBody.trim() : summary.trim()
     const right = position === "start" ? summary.trim() : injectedBody.trim()
@@ -312,4 +402,8 @@ function injectBoundarySummary(
     consumedSeen.add(reference.blockId)
     consumed.push(reference.blockId)
     return next
+}
+
+export function isSummaryShrinkViolation(summaryTokens: number, compressedTokens: number): boolean {
+    return compressedTokens > 0 && summaryTokens >= compressedTokens
 }

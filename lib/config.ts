@@ -34,9 +34,12 @@ export interface CompressConfig {
     nudgeFrequency: number
     iterationNudgeThreshold: number
     nudgeForce: "strong" | "soft"
+    pollCooldown: number
     protectedTools: string[]
     protectTags: boolean
     protectUserMessages: boolean
+    recursiveCondense: boolean
+    enforceSummaryShrink: boolean
 }
 
 export interface Commands {
@@ -63,6 +66,8 @@ export interface TurnProtection {
 export interface ExperimentalConfig {
     allowSubAgents: boolean
     customPrompts: boolean
+    contextAccounting: boolean
+    recoverInherited: boolean
 }
 
 export interface PluginConfig {
@@ -114,6 +119,8 @@ export const VALID_CONFIG_KEYS = new Set([
     "experimental",
     "experimental.allowSubAgents",
     "experimental.customPrompts",
+    "experimental.contextAccounting",
+    "experimental.recoverInherited",
     "protectedFilePatterns",
     "commands",
     "commands.enabled",
@@ -133,9 +140,12 @@ export const VALID_CONFIG_KEYS = new Set([
     "compress.nudgeFrequency",
     "compress.iterationNudgeThreshold",
     "compress.nudgeForce",
+    "compress.pollCooldown",
     "compress.protectedTools",
     "compress.protectTags",
     "compress.protectUserMessages",
+    "compress.recursiveCondense",
+    "compress.enforceSummaryShrink",
     "strategies",
     "strategies.deduplication",
     "strategies.deduplication.enabled",
@@ -293,6 +303,28 @@ export function validateConfigTypes(config: Record<string, any>): ValidationErro
                     actual: typeof experimental.customPrompts,
                 })
             }
+
+            if (
+                experimental.contextAccounting !== undefined &&
+                typeof experimental.contextAccounting !== "boolean"
+            ) {
+                errors.push({
+                    key: "experimental.contextAccounting",
+                    expected: "boolean",
+                    actual: typeof experimental.contextAccounting,
+                })
+            }
+
+            if (
+                experimental.recoverInherited !== undefined &&
+                typeof experimental.recoverInherited !== "boolean"
+            ) {
+                errors.push({
+                    key: "experimental.recoverInherited",
+                    expected: "boolean",
+                    actual: typeof experimental.recoverInherited,
+                })
+            }
         }
     }
 
@@ -426,6 +458,22 @@ export function validateConfigTypes(config: Record<string, any>): ValidationErro
                 })
             }
 
+            if (compress.pollCooldown !== undefined && typeof compress.pollCooldown !== "number") {
+                errors.push({
+                    key: "compress.pollCooldown",
+                    expected: "number",
+                    actual: typeof compress.pollCooldown,
+                })
+            }
+
+            if (typeof compress.pollCooldown === "number" && compress.pollCooldown < 0) {
+                errors.push({
+                    key: "compress.pollCooldown",
+                    expected: "non-negative number (>= 0)",
+                    actual: `${compress.pollCooldown} (will be clamped to 0)`,
+                })
+            }
+
             if (compress.protectedTools !== undefined && !Array.isArray(compress.protectedTools)) {
                 errors.push({
                     key: "compress.protectedTools",
@@ -450,6 +498,28 @@ export function validateConfigTypes(config: Record<string, any>): ValidationErro
                     key: "compress.protectUserMessages",
                     expected: "boolean",
                     actual: typeof compress.protectUserMessages,
+                })
+            }
+
+            if (
+                compress.recursiveCondense !== undefined &&
+                typeof compress.recursiveCondense !== "boolean"
+            ) {
+                errors.push({
+                    key: "compress.recursiveCondense",
+                    expected: "boolean",
+                    actual: typeof compress.recursiveCondense,
+                })
+            }
+
+            if (
+                compress.enforceSummaryShrink !== undefined &&
+                typeof compress.enforceSummaryShrink !== "boolean"
+            ) {
+                errors.push({
+                    key: "compress.enforceSummaryShrink",
+                    expected: "boolean",
+                    actual: typeof compress.enforceSummaryShrink,
                 })
             }
 
@@ -684,6 +754,8 @@ const defaultConfig: PluginConfig = {
     experimental: {
         allowSubAgents: false,
         customPrompts: false,
+        contextAccounting: false,
+        recoverInherited: false,
     },
     protectedFilePatterns: [],
     compress: {
@@ -696,9 +768,12 @@ const defaultConfig: PluginConfig = {
         nudgeFrequency: 5,
         iterationNudgeThreshold: 15,
         nudgeForce: "soft",
+        pollCooldown: 3,
         protectedTools: [...COMPRESS_DEFAULT_PROTECTED_TOOLS],
         protectTags: false,
         protectUserMessages: false,
+        recursiveCondense: false,
+        enforceSummaryShrink: false,
     },
     strategies: {
         deduplication: {
@@ -862,9 +937,12 @@ function mergeCompress(
         nudgeFrequency: override.nudgeFrequency ?? base.nudgeFrequency,
         iterationNudgeThreshold: override.iterationNudgeThreshold ?? base.iterationNudgeThreshold,
         nudgeForce: override.nudgeForce ?? base.nudgeForce,
+        pollCooldown: override.pollCooldown ?? base.pollCooldown,
         protectedTools: [...new Set([...base.protectedTools, ...(override.protectedTools ?? [])])],
         protectTags: override.protectTags ?? base.protectTags,
         protectUserMessages: override.protectUserMessages ?? base.protectUserMessages,
+        recursiveCondense: override.recursiveCondense ?? base.recursiveCondense,
+        enforceSummaryShrink: override.enforceSummaryShrink ?? base.enforceSummaryShrink,
     }
 }
 
@@ -903,6 +981,8 @@ function mergeExperimental(
     return {
         allowSubAgents: override.allowSubAgents ?? base.allowSubAgents,
         customPrompts: override.customPrompts ?? base.customPrompts,
+        contextAccounting: override.contextAccounting ?? base.contextAccounting,
+        recoverInherited: override.recoverInherited ?? base.recoverInherited,
     }
 }
 

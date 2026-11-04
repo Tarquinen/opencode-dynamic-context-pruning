@@ -114,6 +114,16 @@
                     "type": "boolean",
                     "default": false,
                     "description": "Enable user-editable prompt overrides under dcp-prompts directories"
+                },
+                "contextAccounting": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Compute the detailed context accounting snapshot on every message transform (expensive on long sessions; use /dcp context with this enabled, or enable only when debugging). Default false keeps the transform hot path cheap."
+                },
+                "recoverInherited": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Replay completed compress tool parts from session history on first load to rebuild compression blocks for forked/inherited sessions. Expensive on long histories; default false (opt-in diagnostic)."
                 }
             },
             "default": {
@@ -230,6 +240,12 @@
                     "default": "soft",
                     "description": "Controls how likely compression is after user messages. 'strong' is more likely, 'soft' is less likely."
                 },
+                "pollCooldown": {
+                    "type": "number",
+                    "default": 3,
+                    "minimum": 0,
+                    "description": "Number of consecutive tool-only assistant turns (no new user message) after which the emergency max-context nudge is suppressed. 0 disables the cooldown."
+                },
                 "protectedTools": {
                     "type": "array",
                     "items": {
@@ -247,6 +263,11 @@
                     "type": "boolean",
                     "default": false,
                     "description": "When enabled, your messages are never lost during compression"
+                },
+                "recursiveCondense": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When enabled, merging an already-compressed block into a new compression does not expand the child block's full summary into the parent. Instead the model condenses the child block's content directly into its own summary text, so each merge layer is meaningfully smaller than the sum of its children. Protected content from child blocks is still preserved automatically."
                 }
             },
             "default": {
@@ -261,7 +282,8 @@
                 "nudgeForce": "soft",
                 "protectedTools": [],
                 "protectTags": false,
-                "protectUserMessages": false
+                "protectUserMessages": false,
+                "recursiveCondense": false
             }
         },
         "strategies": {

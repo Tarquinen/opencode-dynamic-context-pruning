@@ -47,6 +47,7 @@ import { formatTokenCount } from "../ui/utils"
 import { isIgnoredUserMessage } from "../messages/query"
 import { isMessageCompacted } from "../state/utils"
 import { countTokens, extractCompletedToolOutput, getCurrentParams } from "../token-utils"
+import { formatContextSnapshot } from "../context/accounting"
 import type { AssistantMessage, TextPart, ToolPart } from "@opencode-ai/sdk/v2"
 
 export interface ContextCommandContext {
@@ -298,7 +299,11 @@ export async function handleContextCommand(ctx: ContextCommandContext): Promise<
 
     const breakdown = analyzeContextTokens(state, messages)
 
-    const message = formatContextMessage(breakdown)
+    let message = formatContextMessage(breakdown)
+
+    if (state.lastContextSnapshot) {
+        message += "\n\n" + formatContextSnapshot(state.lastContextSnapshot)
+    }
 
     const params = getCurrentParams(state, messages, logger)
     await sendIgnoredMessage(client, sessionId, message, params, logger)

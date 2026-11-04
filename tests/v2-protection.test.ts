@@ -68,7 +68,7 @@ test("Code Mode protections survive caching, strategy selection, and compression
         [],
         config.protectedFilePatterns,
     )
-    assert.match(summary, /PROTECTED_OUTPUT and another tool's output/)
+    assert.match(summary.summaryText, /PROTECTED_OUTPUT and another tool's output/)
 
     const unprotected = { ...config, protectedFilePatterns: [] }
     deduplicate(state, logger, unprotected, messages)

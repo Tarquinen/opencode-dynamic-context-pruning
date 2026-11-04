@@ -31,6 +31,8 @@ function buildConfig(mode: "message" | "range" = "message"): PluginConfig {
         },
         experimental: {
             allowSubAgents: false,
+            contextAccounting: false,
+            recoverInherited: false,
             customPrompts: false,
         },
         protectedFilePatterns: [],
@@ -43,6 +45,7 @@ function buildConfig(mode: "message" | "range" = "message"): PluginConfig {
             nudgeFrequency: 5,
             iterationNudgeThreshold: 15,
             nudgeForce: "soft",
+            pollCooldown: 3,
             protectedTools: ["task"],
             protectTags: false,
             protectUserMessages: false,

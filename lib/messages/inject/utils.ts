@@ -19,8 +19,12 @@ import {
     hasContent,
 } from "../utils"
 import { getLastUserMessage, isIgnoredUserMessage } from "../query"
-import { getCurrentTokenUsage } from "../../token-utils"
-import { getActiveSummaryTokenUsage } from "../../state/utils"
+import {
+    countAllMessageTokens,
+    getCurrentTokenUsage,
+    isReportedTokensStaleAfterDcpCompression,
+} from "../../token-utils"
+import { getActiveSummaryTokenUsage, isMessageCompacted } from "../../state/utils"
 
 const MESSAGE_MODE_NUDGE_PRIORITY: MessagePriority = "high"
 
@@ -33,7 +37,6 @@ export interface LastNonIgnoredMessage {
     message: WithParts
     index: number
 }
-
 export function getNudgeFrequency(config: PluginConfig): number {
     return Math.max(1, Math.floor(config.compress.nudgeFrequency || 1))
 }
@@ -84,7 +87,7 @@ export function getModelInfo(messages: WithParts[]): LastUserModelContext {
     }
 }
 
-function resolveContextTokenLimit(
+export function resolveContextTokenLimit(
     config: PluginConfig,
     state: SessionState,
     providerId: string | undefined,
@@ -129,13 +132,42 @@ function resolveContextTokenLimit(
     return parseLimitValue(globalLimit)
 }
 
+export interface ContextLimitsResult {
+    overMaxLimit: boolean
+    overMinLimit: boolean
+    currentTokens: number
+    estimatedTransformedTokens: number
+    reportedStale: boolean
+    maxContextLimit: number | undefined
+    minContextLimit: number | undefined
+    summaryTokenExtension: number
+}
+
+/**
+ * Estimate the token cost of the transformed view DCP will actually send:
+ * messages not covered by an active block (their full content) plus the
+ * injected active summaries. This is the local, explainable counterpart to the
+ * provider-reported total.
+ */
+export function estimateTransformedTokens(state: SessionState, messages: WithParts[]): number {
+    let total = 0
+    for (const message of messages) {
+        if (isMessageCompacted(state, message)) {
+            continue
+        }
+        total += countAllMessageTokens(message)
+    }
+    total += getActiveSummaryTokenUsage(state)
+    return total
+}
+
 export function isContextOverLimits(
     config: PluginConfig,
     state: SessionState,
     providerId: string | undefined,
     modelId: string | undefined,
     messages: WithParts[],
-) {
+): ContextLimitsResult {
     const summaryTokenExtension = config.compress.summaryBuffer
         ? getActiveSummaryTokenUsage(state)
         : 0
@@ -152,14 +184,78 @@ export function isContextOverLimits(
             : resolvedMaxContextLimit + summaryTokenExtension
     const minContextLimit = resolveContextTokenLimit(config, state, providerId, modelId, "min")
     const currentTokens = getCurrentTokenUsage(state, messages)
+    const reportedStale = isReportedTokensStaleAfterDcpCompression(state, messages)
 
-    const overMaxLimit = maxContextLimit === undefined ? false : currentTokens > maxContextLimit
+    // After a DCP compression the provider-reported total still describes the
+    // pre-compression request. Do not re-trigger the emergency max nudge from
+    // that stale number alone; only keep it if the local estimate of the
+    // pruned view is itself over the limit. The local estimate requires a full
+    // tokenization pass, so it is computed only when actually needed.
+    const estimatedTransformedTokens =
+        reportedStale && maxContextLimit !== undefined
+            ? estimateTransformedTokens(state, messages)
+            : 0
+
+    const effectiveMaxTokens = reportedStale ? estimatedTransformedTokens : currentTokens
+
+    const overMaxLimit =
+        maxContextLimit === undefined ? false : effectiveMaxTokens > maxContextLimit
     const overMinLimit = minContextLimit === undefined ? true : currentTokens >= minContextLimit
 
     return {
         overMaxLimit,
         overMinLimit,
+        currentTokens,
+        estimatedTransformedTokens,
+        reportedStale,
+        maxContextLimit,
+        minContextLimit,
+        summaryTokenExtension,
     }
+}
+
+/**
+ * Detect "poll-only" turns: consecutive assistant messages that only repeat
+ * tool calls (e.g. polling a server status) without any new user message in
+ * between. During such turns the emergency max-context nudge should not re-fire
+ * on every iteration; the model already has the warning and there is no new
+ * user input to react to.
+ */
+export function isPollOnlyTurn(
+    state: SessionState,
+    messages: WithParts[],
+    pollTurns: number,
+): boolean {
+    const threshold = Math.max(1, pollTurns)
+    let consecutiveToolOnlyAssistant = 0
+
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const message = messages[i]
+        if (isIgnoredUserMessage(message)) {
+            continue
+        }
+
+        if (message.info.role === "user") {
+            break
+        }
+
+        if (message.info.role !== "assistant") {
+            break
+        }
+
+        const parts = Array.isArray(message.parts) ? message.parts : []
+        const hasToolCall = parts.some((part) => part.type === "tool")
+        if (!hasToolCall) {
+            break
+        }
+
+        consecutiveToolOnlyAssistant++
+        if (consecutiveToolOnlyAssistant >= threshold) {
+            return true
+        }
+    }
+
+    return false
 }
 
 export function addAnchor(
@@ -352,7 +448,15 @@ export function applyAnchoredNudges(
         return
     }
 
-    const compressedBlockGuidance = buildCompressedBlockGuidance(state)
+    const hasAnyAnchor =
+        state.nudges.contextLimitAnchors.size > 0 ||
+        turnNudgeAnchors.size > 0 ||
+        state.nudges.iterationNudgeAnchors.size > 0
+    if (!hasAnyAnchor) {
+        return
+    }
+
+    const compressedBlockGuidance = buildCompressedBlockGuidance(state, messages)
     applyRangeModeAnchoredNudge(
         state.nudges.contextLimitAnchors,
         messages,

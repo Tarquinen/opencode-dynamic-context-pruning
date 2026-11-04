@@ -19,7 +19,12 @@ function buildConfig(manualMode = false): PluginConfig {
         commands: { enabled: true, protectedTools: [] },
         manualMode: { enabled: manualMode, automaticStrategies: true },
         turnProtection: { enabled: false, turns: 4 },
-        experimental: { allowSubAgents: false, customPrompts: false },
+        experimental: {
+            allowSubAgents: false,
+            contextAccounting: false,
+            recoverInherited: false,
+            customPrompts: false,
+        },
         protectedFilePatterns: [],
         compress: {
             mode: "message",
@@ -30,6 +35,7 @@ function buildConfig(manualMode = false): PluginConfig {
             nudgeFrequency: 5,
             iterationNudgeThreshold: 15,
             nudgeForce: "soft",
+            pollCooldown: 3,
             protectedTools: ["task"],
             protectTags: false,
             protectUserMessages: false,

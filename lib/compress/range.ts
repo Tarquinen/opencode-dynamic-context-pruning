@@ -12,6 +12,7 @@ import {
 import {
     appendMissingBlockSummaries,
     injectBlockPlaceholders,
+    isSummaryShrinkViolation,
     parseBlockPlaceholders,
     resolveRanges,
     validateArgs,
@@ -26,6 +27,8 @@ import {
     wrapCompressedSummary,
 } from "./state"
 import type { CompressRangeToolArgs } from "./types"
+import type { ProtectedContent } from "../state"
+import { isSingleBlockRewrap, recondenseBlockInPlace } from "./recondense"
 
 function buildSchema(format: IdFormat) {
     return {
@@ -86,10 +89,12 @@ export function createCompressRangeTool(ctx: ToolContext): ReturnType<typeof too
                 anchorMessageId: string
                 finalSummary: string
                 consumedBlockIds: number[]
+                protectedContent: ProtectedContent[]
             }> = []
             let totalCompressedMessages = 0
 
             for (const plan of resolvedPlans) {
+                const condense = ctx.config.compress.recursiveCondense === true
                 const parsedPlaceholders = parseBlockPlaceholders(
                     plan.entry.summary,
                     ctx.state.idFormat,
@@ -108,9 +113,10 @@ export function createCompressRangeTool(ctx: ToolContext): ReturnType<typeof too
                     searchContext.summaryByBlockId,
                     plan.selection.startReference,
                     plan.selection.endReference,
+                    condense,
                 )
 
-                const summaryWithUsers = appendProtectedUserMessages(
+                const users = appendProtectedUserMessages(
                     injected.expandedSummary,
                     plan.selection,
                     searchContext,
@@ -118,19 +124,19 @@ export function createCompressRangeTool(ctx: ToolContext): ReturnType<typeof too
                     ctx.config.compress.protectUserMessages,
                 )
 
-                const summaryWithPromptInfo = appendProtectedPromptInfo(
-                    summaryWithUsers,
+                const promptInfo = appendProtectedPromptInfo(
+                    users.summaryText,
                     plan.selection,
                     searchContext,
                     ctx.state,
                     ctx.config.compress.protectTags,
                 )
 
-                const summaryWithTools = await appendProtectedTools(
+                const tools = await appendProtectedTools(
                     ctx.client,
                     ctx.state,
                     ctx.config.experimental.allowSubAgents,
-                    summaryWithPromptInfo,
+                    promptInfo.summaryText,
                     plan.selection,
                     searchContext,
                     ctx.config.compress.protectedTools,
@@ -138,12 +144,40 @@ export function createCompressRangeTool(ctx: ToolContext): ReturnType<typeof too
                 )
 
                 const completedSummary = appendMissingBlockSummaries(
-                    summaryWithTools,
+                    tools.summaryText,
                     missingBlockIds,
                     searchContext.summaryByBlockId,
                     injected.consumedBlockIds,
                     ctx.state.idFormat,
+                    condense,
                 )
+
+                const protectedContent = [
+                    ...users.protectedContent,
+                    ...promptInfo.protectedContent,
+                    ...tools.protectedContent,
+                ]
+
+                if (ctx.config.compress.enforceSummaryShrink) {
+                    let compressedTokens = 0
+                    for (const tokenCount of plan.selection.messageTokenById.values()) {
+                        compressedTokens += tokenCount
+                    }
+                    for (const consumedBlockId of completedSummary.consumedBlockIds) {
+                        const consumedBlock = searchContext.summaryByBlockId.get(consumedBlockId)
+                        if (consumedBlock) {
+                            compressedTokens += consumedBlock.summaryTokens
+                        }
+                    }
+                    const summaryTokens = countTokens(completedSummary.expandedSummary)
+                    if (isSummaryShrinkViolation(summaryTokens, compressedTokens)) {
+                        throw new Error(
+                            `Compression rejected: summary (~${summaryTokens} tokens) is not smaller than the content it replaces (~${compressedTokens} tokens). ` +
+                                "Write a much more condensed summary - it must be significantly smaller than what it replaces. " +
+                                "Prefer merging existing compressed blocks into one parent instead of restating their full content.",
+                        )
+                    }
+                }
 
                 preparedPlans.push({
                     entry: plan.entry,
@@ -151,12 +185,30 @@ export function createCompressRangeTool(ctx: ToolContext): ReturnType<typeof too
                     anchorMessageId: plan.anchorMessageId,
                     finalSummary: completedSummary.expandedSummary,
                     consumedBlockIds: completedSummary.consumedBlockIds,
+                    protectedContent,
                 })
             }
 
             const runId = allocateRunId(ctx.state)
+            let recondensedCount = 0
+            let skippedRewrapCount = 0
 
             for (const preparedPlan of preparedPlans) {
+                const rewrapBlockId = isSingleBlockRewrap(ctx.state, preparedPlan.selection)
+                if (rewrapBlockId !== null) {
+                    const result = recondenseBlockInPlace(
+                        ctx.state,
+                        rewrapBlockId,
+                        preparedPlan.entry.summary,
+                    )
+                    if (result.replaced) {
+                        recondensedCount++
+                    } else {
+                        skippedRewrapCount++
+                    }
+                    continue
+                }
+
                 const blockId = allocateBlockId(ctx.state)
                 const storedSummary = wrapCompressedSummary(
                     blockId,
@@ -183,6 +235,7 @@ export function createCompressRangeTool(ctx: ToolContext): ReturnType<typeof too
                     blockId,
                     storedSummary,
                     preparedPlan.consumedBlockIds,
+                    preparedPlan.protectedContent,
                 )
 
                 totalCompressedMessages += applied.messageIds.length
@@ -195,9 +248,34 @@ export function createCompressRangeTool(ctx: ToolContext): ReturnType<typeof too
                 })
             }
 
+            if (recondensedCount > 0) {
+                ctx.state.lastDcpCompression = Date.now()
+            }
+
             await finalizeSession(ctx, toolCtx, rawMessages, notifications, input.topic)
 
-            return `Compressed ${totalCompressedMessages} messages into ${COMPRESSED_BLOCK_HEADER}.`
+            const resultParts: string[] = []
+            if (totalCompressedMessages > 0 || notifications.length > 0) {
+                resultParts.push(
+                    `Compressed ${totalCompressedMessages} messages into ${COMPRESSED_BLOCK_HEADER}.`,
+                )
+            }
+            if (recondensedCount > 0) {
+                resultParts.push(
+                    `Recondensed ${recondensedCount} existing block(s) in place (no new block).`,
+                )
+            }
+            if (skippedRewrapCount > 0) {
+                resultParts.push(
+                    `Skipped ${skippedRewrapCount} compression(s) that only re-wrapped an already-compressed block without shrinking it.`,
+                )
+            }
+            if (resultParts.length === 0) {
+                resultParts.push(
+                    "No compression was performed: the requested range would only re-wrap already-compressed content without adding new coverage or shrinking the summary.",
+                )
+            }
+            return resultParts.join("\n")
         },
     })
 }
