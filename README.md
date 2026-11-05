@@ -130,11 +130,13 @@ Each level overrides the previous, so project settings take priority over global
         // Soft upper threshold: above this, DCP keeps injecting strong
         // compression nudges (based on nudgeFrequency), so compression is
         // much more likely. Accepts: number or "X%" of model context window.
-        "maxContextLimit": 100000,
+        // Defaults to 70% of the model window so large-context models are
+        // not nudged as if they were close to a fixed 100k limit.
+        "maxContextLimit": "70%",
         // Soft lower threshold for reminder nudges: below this, turn/iteration
         // reminders are off (compression less likely). At/above this, reminders
         // are on. Accepts: number or "X%" of model context window.
-        "minContextLimit": 50000,
+        "minContextLimit": "35%",
         // Optional per-model override for maxContextLimit by providerID/modelID.
         // If present, this wins over the global maxContextLimit.
         // Accepts: number or "X%".
