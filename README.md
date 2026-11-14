@@ -17,6 +17,21 @@ opencode plugin add @tarquinen/opencode-dcp@latest
 
 This installs the package and adds it to your global OpenCode config.
 
+To try a local build in V2, run `npm install` and `npm run build` in this
+directory, then add the directory to your project's `opencode.jsonc`:
+
+```jsonc
+{
+    "$schema": "https://opencode.ai/config.json",
+    "plugins": ["/absolute/path/to/opencode-dynamic-context-pruning"]
+}
+```
+
+The existing V2 implementation is not yet fully equivalent to V1: compression
+with the `ask` permission is blocked, and some command reports are logged rather
+than displayed in the session. Test the features you rely on before replacing
+your V1 installation.
+
 ## Project Status
 
 Development on DCP has slowed because most new context-management work has moved to [Sleev](https://sleev.ai) and the `sleev` CLI.
@@ -61,7 +76,9 @@ DCP uses its own config file, searched in order:
 2. Custom config directory: `$OPENCODE_CONFIG_DIR/dcp.jsonc` (or `dcp.json`), if `OPENCODE_CONFIG_DIR` is set
 3. Project: `.opencode/dcp.jsonc` (or `dcp.json`) in your project's `.opencode` directory
 
-Each level overrides the previous, so project settings take priority over global. Restart OpenCode after making config changes.
+Each level overrides the previous, so project settings take priority over global. See
+[`dcp.example.jsonc`](./dcp.example.jsonc) for all options, defaults, and V2 limitations.
+DCP reads its settings when the plugin loads; reload OpenCode's configuration after changing them.
 
 > [!NOTE]
 > If your model has a smaller context window, lower `compress.minContextLimit` and `compress.maxContextLimit` in your configuration to match the available context.

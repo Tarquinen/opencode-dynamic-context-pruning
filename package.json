@@ -62,8 +62,8 @@
     "dependencies": {
         "@anthropic-ai/tokenizer": "^0.0.4",
         "@opencode-ai/sdk": "^1.4.3",
-        "@opentui/core": "^0.4.5",
-        "@opentui/solid": "^0.4.5",
+        "@opentui/core": "^0.6.8",
+        "@opentui/solid": "^0.6.8",
         "jsonc-parser": "^3.3.1",
         "solid-js": "^1.9.12"
     },
@@ -86,6 +86,7 @@
         "lib/",
         "server.js",
         "tui.tsx",
+        "dcp.example.jsonc",
         "README.md",
         "LICENSE"
     ]

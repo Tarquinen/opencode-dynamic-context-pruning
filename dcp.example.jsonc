@@ -1,0 +1,96 @@
+{
+    // Reference only: copy desired settings to ~/.config/opencode/dcp.jsonc or
+    // <project>/.opencode/dcp.jsonc. This example is not loaded automatically.
+    // Project values override global values; protected-tool lists are additive.
+    "$schema": "https://raw.githubusercontent.com/Opencode-DCP/opencode-dynamic-context-pruning/master/dcp.schema.json",
+
+    // Enable the plugin. Defaults are shown throughout this file.
+    "enabled": true,
+    // V1 npm auto-update setting; the V2 implementation does not run it.
+    "autoUpdate": true,
+    // Write diagnostic information to the DCP log directory.
+    "debug": false,
+    // Notification verbosity: "off", "minimal", or "detailed".
+    // V2 currently logs reports rather than showing chat/toast notifications.
+    "pruneNotification": "detailed",
+    // Notification destination: "chat" or "toast" (V2 limitation above).
+    "pruneNotificationType": "chat",
+
+    "commands": {
+        // Enable the /dcp panel and commands.
+        "enabled": true,
+        // Additional tools protected from command-based pruning; supports * and ?.
+        // Example: ["mcp_*", "my_tool_?"]
+        "protectedTools": []
+    },
+    "manualMode": {
+        // Start new sessions in manual mode; automatic compression is disabled.
+        "enabled": false,
+        // Keep automatic cleanup strategies available while in manual mode.
+        "automaticStrategies": true
+    },
+    "turnProtection": {
+        // Protect recent tool outputs from pruning.
+        "enabled": false,
+        // Number of recent turns to protect (at least 1).
+        "turns": 4
+    },
+    "experimental": {
+        // Allow processing and compression in subagent sessions.
+        "allowSubAgents": false,
+        // Enable prompt files in dcp-prompts override directories.
+        "customPrompts": false
+    },
+    // File path glob patterns whose matching tool calls should be protected.
+    // Example: ["**/AGENTS.md", "**/*.config.ts"]
+    "protectedFilePatterns": [],
+
+    "compress": {
+        // "range" summarizes spans; experimental "message" summarizes individual messages.
+        "mode": "range",
+        // "allow" runs without asking; "deny" disables compression. V2 currently
+        // blocks "ask" instead of displaying a permission prompt.
+        "permission": "allow",
+        // Include compression summaries in notifications (V2 reports are logged).
+        "showCompression": false,
+        // Add active summary tokens to the upper nudge threshold.
+        "summaryBuffer": true,
+        // Soft thresholds in tokens or as a percentage of the model context window.
+        // Above max, stronger nudges are sent; below min, reminders are suppressed.
+        "maxContextLimit": 100000,
+        "minContextLimit": 50000,
+        // Exact provider/model keys override the thresholds above for that model.
+        // Examples: { "provider/model": "80%" } and { "provider/model": "25%" }.
+        "modelMaxLimits": {},
+        "modelMinLimits": {},
+        // Above the maximum, nudge every N model fetches (minimum 1).
+        "nudgeFrequency": 5,
+        // Number of messages after the last user message before reminders (minimum 1).
+        "iterationNudgeThreshold": 15,
+        // "strong" encourages compression more aggressively than "soft".
+        "nudgeForce": "soft",
+        // Additional tools whose completed results are preserved in summaries.
+        // Supports * and ?; built-in protected tools remain protected.
+        "protectedTools": [],
+        // Preserve content enclosed in <protect>...</protect> tags.
+        "protectTags": false,
+        // Preserve user messages verbatim; large pasted messages then remain large.
+        "protectUserMessages": false
+    },
+    "strategies": {
+        "deduplication": {
+            // Remove older duplicate outputs for identical tool calls.
+            "enabled": true,
+            // Additional tool names/globs excluded from deduplication.
+            "protectedTools": []
+        },
+        "purgeErrors": {
+            // Prune inputs of old failed calls; retain their error messages.
+            "enabled": true,
+            // Wait this many turns before pruning failed tool inputs (minimum 1).
+            "turns": 4,
+            // Additional tool names/globs excluded from error purging.
+            "protectedTools": []
+        }
+    }
+}

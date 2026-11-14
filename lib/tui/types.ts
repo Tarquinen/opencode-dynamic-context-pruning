@@ -18,6 +18,7 @@ export type Theme = Pick<
 >
 export type ThemeColor = keyof Theme
 export type ViewApi = {
+    centeredDialog?: boolean
     theme: { readonly current: Theme }
     renderer: Pick<TuiApi["renderer"], "height" | "on" | "off">
     ui: { dialog: { clear(): void } }
