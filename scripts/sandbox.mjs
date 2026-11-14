@@ -40,7 +40,7 @@ Each launch uses the latest stable release of the selected major version.
   --logs              Show the latest raw/readable log paths and capture counts
   --path              Print the current sandbox's host directory
   --opencode VERSION  Use an exact version for this launch (V1 requires 1.18.29+)
-  --dcp VERSION       Use npm DCP (e.g. latest or 3.2.0); default: local checkout
+  --dcp VERSION       Use npm DCP (e.g. latest or 3.2.1); default: local checkout
   --model MODEL       Remember a provider/model (otherwise OpenCode selects one)
   --transport TYPE    V2: websocket or http; V1: http only
 
@@ -48,7 +48,7 @@ Examples:
   dcp-sandbox
   dcp-sandbox --v1
   dcp-sandbox --dcp latest --fresh
-  dcp-sandbox --opencode 2.0.12 --dcp 3.2.0
+  dcp-sandbox --opencode 2.0.12 --dcp 3.2.1
   dcp-sandbox --v1 --logs
   dcp-sandbox -- --continue
   dcp-sandbox -- run --format json "Reply with OK."
@@ -196,8 +196,8 @@ async function main() {
             major,
             dcp:
                 dcp === "local"
-                    ? "/lab/plugins/node_modules/@tarquinen/opencode-dcp"
-                    : `@tarquinen/opencode-dcp@${dcp}`,
+                    ? "/lab/plugins/node_modules/@mbarnett/opencode-dcp"
+                    : `@mbarnett/opencode-dcp@${dcp}`,
             packages,
             stamp,
             args: cli,
@@ -205,7 +205,7 @@ async function main() {
         console.log(
             `OpenCode ${release} · ${settings.model || "default model"} · ${settings.transport || "provider transport"}`,
         )
-        console.log(`DCP: ${dcp === "local" ? "local checkout" : `@tarquinen/opencode-dcp@${dcp}`}`)
+        console.log(`DCP: ${dcp === "local" ? "local checkout" : `@mbarnett/opencode-dcp@${dcp}`}`)
         console.log(`Workspace: ${join(home, "project")}`)
         console.log(`DCP config: ${join(home, "home/config/opencode/dcp.jsonc")}`)
         console.log(`Readable logs: ${join(home, "logs", stamp, "readable")}`)

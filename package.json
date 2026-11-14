@@ -1,7 +1,7 @@
 {
     "$schema": "https://json.schemastore.org/package.json",
-    "name": "@tarquinen/opencode-dcp",
-    "version": "3.2.0",
+    "name": "@mbarnett/opencode-dcp",
+    "version": "3.2.1",
     "type": "module",
     "workspaces": [
         "tests/logger"
@@ -48,13 +48,13 @@
     ],
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/Opencode-DCP/opencode-dynamic-context-pruning.git"
+        "url": "git+https://github.com/mathewbarnett/opencode-dynamic-context-pruning.git"
     },
     "bugs": {
-        "url": "https://github.com/Opencode-DCP/opencode-dynamic-context-pruning/issues"
+        "url": "https://github.com/mathewbarnett/opencode-dynamic-context-pruning/issues"
     },
-    "homepage": "https://github.com/Opencode-DCP/opencode-dynamic-context-pruning#readme",
-    "author": "tarquinen",
+    "homepage": "https://github.com/mathewbarnett/opencode-dynamic-context-pruning#readme",
+    "author": "mbarnett",
     "license": "AGPL-3.0-or-later",
     "peerDependencies": {
         "@opencode-ai/plugin": ">=1.18.29"

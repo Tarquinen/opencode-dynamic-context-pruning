@@ -98,9 +98,9 @@ try {
         for (const plugin of tui.plugin ?? []) {
             if (
                 typeof plugin === "string" &&
-                (plugin === "/lab/plugins/node_modules/@tarquinen/opencode-dcp" ||
-                    plugin === "@tarquinen/opencode-dcp" ||
-                    plugin.startsWith("@tarquinen/opencode-dcp@"))
+                (plugin === "/lab/plugins/node_modules/@mbarnett/opencode-dcp" ||
+                    plugin === "@mbarnett/opencode-dcp" ||
+                    plugin.startsWith("@mbarnett/opencode-dcp@"))
             )
                 continue
             plugins.push(plugin)

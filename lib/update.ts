@@ -14,7 +14,7 @@ type UpdateResult =
     | { updated: false; error: "remove_failed"; name: string; current: string; latest: string }
     | { updated: false }
 
-const PACKAGE_NAME = "@tarquinen/opencode-dcp"
+const PACKAGE_NAME = "@mbarnett/opencode-dcp"
 
 export function startAutoUpdate(ctx: PluginInput, enabled: boolean): void {
     if (!enabled) return

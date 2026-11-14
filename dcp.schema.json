@@ -1,6 +1,6 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "$id": "https://raw.githubusercontent.com/Opencode-DCP/opencode-dynamic-context-pruning/master/dcp.schema.json",
+    "$id": "https://raw.githubusercontent.com/mathewbarnett/opencode-dynamic-context-pruning/master/dcp.schema.json",
     "title": "DCP Plugin Configuration",
     "description": "Configuration schema for the OpenCode Dynamic Context Pruning plugin",
     "type": "object",
