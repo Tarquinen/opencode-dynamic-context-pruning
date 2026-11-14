@@ -10,6 +10,7 @@ export async function setup(ctx: Plugin.Context) {
     const options = () => ({ location: ctx.location ?? ctx.data.location.default() })
     if (!(await client.status({}, options())).enabled) return
     const api: ViewApi = {
+        centeredDialog: true,
         renderer: ctx.renderer,
         theme: {
             get current() {
@@ -19,8 +20,8 @@ export async function setup(ctx: Plugin.Context) {
         ui: { dialog: { clear: () => ctx.ui.dialog.clear() } },
     }
     function show(render: Parameters<typeof ctx.ui.dialog.show>[0]) {
-        ctx.ui.dialog.set({ size: "xlarge" })
         ctx.ui.dialog.show(render)
+        ctx.ui.dialog.set({ size: "large", centered: true })
     }
     async function open(page: "panel" | "context" | "stats" = "panel") {
         const route = ctx.ui.router.current()

@@ -20,10 +20,13 @@ export function DcpFrame(props: {
     let inner: BoxRenderable | undefined
     function available() {
         const height = props.api.renderer.height
-        return Math.max(10, height - Math.floor(height / 4) - 2) - FRAME_OVERHEAD
+        const reserved = props.api.centeredDialog ? 4 : Math.floor(height / 4) + 2
+        return Math.max(1, height - reserved - FRAME_OVERHEAD)
     }
     function resize() {
-        if (body) body.height = Math.min(inner?.height || available(), available())
+        const extra = props.api.centeredDialog ? 2 : 0
+        if (body)
+            body.height = Math.min(inner?.height ? inner.height + extra : available(), available())
     }
     return (
         <box paddingLeft={3} paddingRight={3} paddingBottom={1} gap={1}>
