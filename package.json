@@ -48,12 +48,12 @@
     ],
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/Opencode-DCP/opencode-dynamic-context-pruning.git"
+        "url": "git+https://github.com/Tarquinen/opencode-dynamic-context-pruning.git"
     },
     "bugs": {
-        "url": "https://github.com/Opencode-DCP/opencode-dynamic-context-pruning/issues"
+        "url": "https://github.com/Tarquinen/opencode-dynamic-context-pruning/issues"
     },
-    "homepage": "https://github.com/Opencode-DCP/opencode-dynamic-context-pruning#readme",
+    "homepage": "https://github.com/Tarquinen/opencode-dynamic-context-pruning#readme",
     "author": "tarquinen",
     "license": "AGPL-3.0-or-later",
     "peerDependencies": {
