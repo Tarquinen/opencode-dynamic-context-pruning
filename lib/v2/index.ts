@@ -178,10 +178,10 @@ export async function setup(ctx: Plugin.Context) {
                     event.agent,
                 )
                 if (state.isSubAgent && !config.experimental.allowSubAgents) {
-                    delete event.tools.compress
+                    delete event.tools?.compress
                     return
                 }
-                if (state.compressPermission === "deny") delete event.tools.compress
+                if (state.compressPermission === "deny") delete event.tools?.compress
                 state.modelContextLimit = limits.get(`${event.model.providerID}/${event.model.id}`)
                 state.systemPromptTokens = countTokens(
                     event.system.map((part) => part.text).join("\n"),
