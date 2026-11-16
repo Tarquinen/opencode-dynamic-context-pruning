@@ -79,7 +79,11 @@
     },
     "overrides": {
         "@babel/core": "7.29.7",
-        "esbuild": "0.28.1"
+        "@opencode-ai/plugin": {
+            "effect": "4.0.0-rc.112"
+        },
+        "esbuild": "0.28.1",
+        "zod": "4.6.7"
     },
     "files": [
         "dist/",
