@@ -8,7 +8,7 @@ import { injectMessageIds } from "../lib/messages/inject/inject"
 import { applyAnchoredNudges } from "../lib/messages/inject/utils"
 import { prune } from "../lib/messages/prune"
 import { buildPriorityMap } from "../lib/messages/priority"
-import { stripHallucinationsFromString } from "../lib/messages/utils"
+import { stripHallucinations, stripHallucinationsFromString } from "../lib/messages/utils"
 import { createSessionState, type WithParts } from "../lib/state"
 
 function buildConfig(mode: "message" | "range" = "message"): PluginConfig {
@@ -843,6 +843,28 @@ test("hallucination stripping removes trailing mXXXX</parameter> artifact (issue
         stripHallucinationsFromString("Total: maybe 20 lines changed.\n\nm0340</parameter>\n\n"),
         "Total: maybe 20 lines changed.\n\n",
     )
+})
+
+test("hallucination stripping keeps dcp tags in tool output (issue #657)", () => {
+    const sessionID = "ses_tool_output_tags"
+    const output = "AAA\n\n<dcp-system-reminder>\nHELLO-INSIDE\n</dcp-system-reminder>\n\nZZZ"
+    const messages: WithParts[] = [
+        buildMessage("msg-user-1", "user", sessionID, "cat /tmp/t.txt", 1),
+        {
+            info: {
+                id: "msg-assistant-1",
+                role: "assistant",
+                sessionID,
+                agent: "assistant",
+                time: { created: 2 },
+            } as WithParts["info"],
+            parts: [toolPart("msg-assistant-1", sessionID, "call-1", "bash", output)],
+        },
+    ]
+
+    stripHallucinations(messages)
+
+    assert.equal((messages[1]?.parts[0] as any).state.output, output)
 })
 
 test("injectMessageIds skips empty assistant messages to avoid prefill (issue #463)", () => {

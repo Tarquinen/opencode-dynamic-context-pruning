@@ -126,7 +126,7 @@ test("V2 cleans echoed IDs and priorities before injecting correct protected/mes
     ] as WithParts["parts"]
     stripHallucinations(raw, state.idFormat)
     assert.equal((raw[1]!.parts[0] as any).text, "It’s 2026.\n")
-    assert.doesNotMatch(JSON.stringify(raw), /@94@|@b9@|@blocked@|\[high\]/)
+    assert.equal((raw[1]!.parts[1] as any).state.output, "Result @b9@ @blocked@")
     const settings = config("message")
     settings.compress.protectUserMessages = true
     assignMessageRefs(state, raw)
