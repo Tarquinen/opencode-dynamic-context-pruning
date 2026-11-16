@@ -2,8 +2,18 @@ import { SessionState, WithParts } from "./state"
 import { AssistantMessage, UserMessage } from "@opencode-ai/sdk/v2"
 import { Logger } from "./logger"
 import * as _anthropicTokenizer from "@anthropic-ai/tokenizer"
-const anthropicCountTokens = (_anthropicTokenizer.countTokens ??
-    (_anthropicTokenizer as any).default?.countTokens) as typeof _anthropicTokenizer.countTokens
+const getAnthropicTokenizer = (_anthropicTokenizer.getTokenizer ??
+    (_anthropicTokenizer as any).default?.getTokenizer) as typeof _anthropicTokenizer.getTokenizer
+
+// The package's countTokens() builds a new tokenizer on every call, which is slow.
+// Build one once and reuse it, encoding the same way countTokens() does.
+let anthropicTokenizer: ReturnType<typeof getAnthropicTokenizer> | undefined
+function anthropicCountTokens(text: string): number {
+    if (!anthropicTokenizer) {
+        anthropicTokenizer = getAnthropicTokenizer()
+    }
+    return anthropicTokenizer.encode(text.normalize("NFKC"), "all").length
+}
 import { getLastUserMessage } from "./messages/query"
 
 export function getCurrentTokenUsage(state: SessionState, messages: WithParts[]): number {

@@ -14,7 +14,10 @@ function textPart(messageID: string, sessionID: string, id: string, text: string
     }
 }
 
-function buildCompactedMessages(sessionID: string): WithParts[] {
+function buildCompactedMessages(
+    sessionID: string,
+    summaryInfo: Record<string, unknown> = { finish: "stop" },
+): WithParts[] {
     return [
         {
             info: {
@@ -24,6 +27,7 @@ function buildCompactedMessages(sessionID: string): WithParts[] {
                 agent: "assistant",
                 summary: true,
                 time: { created: 2 },
+                ...summaryInfo,
             } as WithParts["info"],
             parts: [
                 textPart(
@@ -86,4 +90,25 @@ test("checkSession resets message id aliases after native compaction", async () 
     assert.equal(state.messageIds.byRef.get("m0001"), "msg-assistant-summary")
     assert.equal(state.messageIds.byRef.get("m0002"), "msg-user-follow-up")
     assert.equal(state.messageIds.nextRef, 3)
+})
+
+test("checkSession ignores failed native compaction summaries", async () => {
+    const failedSummaries = [{}, { finish: "error", error: { name: "UnknownError" } }]
+    for (const summaryInfo of failedSummaries) {
+        const sessionID = `ses_message_ids_failed_compaction_${Date.now()}`
+        const messages = buildCompactedMessages(sessionID, summaryInfo)
+        const state = createSessionState()
+        const logger = new Logger(false)
+
+        state.sessionId = sessionID
+        state.messageIds.byRawId.set("old-message", "m0001")
+        state.messageIds.byRef.set("m0001", "old-message")
+        state.messageIds.nextRef = 2
+
+        await checkSession({} as any, state, logger, messages, false)
+
+        assert.equal(state.lastCompaction, 0)
+        assert.equal(state.messageIds.byRef.get("m0001"), "old-message")
+        assert.equal(state.messageIds.nextRef, 2)
+    }
 })

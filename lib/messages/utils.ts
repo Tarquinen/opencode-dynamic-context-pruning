@@ -183,14 +183,6 @@ export const stripHallucinations = (messages: WithParts[], format: IdFormat = "x
             if (part.type === "text" && typeof part.text === "string") {
                 part.text = stripHallucinationsFromString(part.text, format)
             }
-
-            if (
-                part.type === "tool" &&
-                part.state?.status === "completed" &&
-                typeof part.state.output === "string"
-            ) {
-                part.state.output = stripHallucinationsFromString(part.state.output, format)
-            }
         }
     }
 }

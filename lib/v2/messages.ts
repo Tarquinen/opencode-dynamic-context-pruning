@@ -76,7 +76,8 @@ export function history(entries: History, session: Session): WithParts[] {
             ]
         }
         if (entry.type === "compaction" && entry.status === "completed") {
-            return [{ info: info(entry.id, "assistant", session, entry), parts: [] } as WithParts]
+            const summary = { ...info(entry.id, "assistant", session, entry), finish: "stop" }
+            return [{ info: summary, parts: [] } as WithParts]
         }
         return []
     })
@@ -90,15 +91,23 @@ function output(content: ReadonlyArray<{ type: string; text?: string }>): unknow
 
 export function project(native: Message[], entries: History, session: Session) {
     const byID = new Map(entries.map((entry) => [entry.id, entry]))
-    const results = new Map<string, ToolResultPart>()
-    const owners = new Map<string, string>()
+    // Providers can reuse tool call IDs across turns, so pair each result with the
+    // closest preceding call that has the same ID.
+    const calls = new Map<string, { part: ContentPart; messageId?: string }>()
+    const results = new Map<ContentPart, ToolResultPart>()
+    const owners = new Map<ContentPart, string>()
     const links = new Map<ContentPart, Part>()
     const originals = new Map<string, WithParts>()
     const messages: WithParts[] = []
     for (const message of native)
         for (const part of message.content) {
-            if (part.type === "tool-result") results.set(part.id, part)
-            if (part.type === "tool-call" && message.id) owners.set(part.id, message.id)
+            if (part.type === "tool-call") calls.set(part.id, { part, messageId: message.id })
+            if (part.type === "tool-result") {
+                const call = calls.get(part.id)
+                if (!call) continue
+                results.set(call.part, part)
+                if (call.messageId) owners.set(part, call.messageId)
+            }
         }
     for (const message of native) {
         if (!message.id || !["user", "assistant"].includes(message.role)) continue
@@ -121,7 +130,7 @@ export function project(native: Message[], entries: History, session: Session) {
                     url: typeof part.data === "string" ? part.data : "",
                 }
             if (part.type === "tool-call") {
-                const result = results.get(part.id)
+                const result = results.get(part)
                 const entry = byID.get(message.id)
                 const durable =
                     entry?.type === "assistant"
@@ -205,8 +214,8 @@ export function project(native: Message[], entries: History, session: Session) {
                 if (part.type === "tool-call") content.push(...added.splice(0))
                 if (
                     part.type === "tool-result" &&
-                    originals.has(owners.get(part.id)!) &&
-                    !retained.has(owners.get(part.id)!)
+                    originals.has(owners.get(part)!) &&
+                    !retained.has(owners.get(part)!)
                 )
                     continue
                 const edit = links.get(part)

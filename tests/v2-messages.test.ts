@@ -1,7 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import type { Message } from "@opencode/ai/schema/messages"
-import { project } from "../lib/v2/messages"
+import { history, project } from "../lib/v2/messages"
+import { findLastCompactionTimestamp } from "../lib/state/utils"
 import { createSessionState, type CompressionBlock } from "../lib/state"
 import { assignMessageRefs } from "../lib/message-ids"
 import { injectMessageIds, prune } from "../lib/messages"
@@ -168,4 +169,49 @@ test("V2 inserts summaries after native checkpoints without an ordinary user mes
     assert.equal(restored.length, 2)
     assert.deepEqual(restored[0], native[0])
     assert.deepEqual(restored[1]?.content, [{ type: "text", text: "CHECKPOINT_SUMMARY" }])
+})
+
+test("V2 compression keeps results paired when tool call IDs are reused", () => {
+    const call = (input: string) => ({
+        type: "tool-call",
+        id: "bash:0",
+        name: "bash",
+        input: { command: input },
+    })
+    const result = (value: string) => ({
+        role: "tool",
+        content: [
+            { type: "tool-result", id: "bash:0", name: "bash", result: { type: "text", value } },
+        ],
+    })
+    const native = [
+        { id: "msg_user", role: "user", content: [{ type: "text", text: "Run both" }] },
+        { id: "msg_first", role: "assistant", content: [call("echo one")] },
+        result("one"),
+        { id: "msg_second", role: "assistant", content: [call("echo two")] },
+        result("two"),
+        { id: "msg_latest", role: "user", content: [{ type: "text", text: "Continue" }] },
+    ] as Message[]
+    const view = project(native, entries(native), session)
+    const outputs = view.messages.flatMap((message) =>
+        message.parts.flatMap((part) => (part.type === "tool" ? [part.state.output] : [])),
+    )
+    assert.deepEqual(outputs, ["one", "two"])
+
+    const state = createSessionState("compact")
+    state.prune.messages.byMessageId.set("msg_first", {
+        tokenCount: 100,
+        allBlockIds: [1],
+        activeBlockIds: [1],
+    })
+    prune(state, logger, config, view.messages)
+    assert.deepEqual(view.restore(), [native[0], native[3], native[4], native[5]])
+})
+
+test("completed V2 compaction entries count as native compaction", () => {
+    const entries = [
+        { id: "cmp_one", type: "compaction", status: "completed", time: { created: 5 } },
+        { id: "msg_user", type: "user", text: "Continue", time: { created: 6 } },
+    ] as unknown as Parameters<typeof history>[0]
+    assert.equal(findLastCompactionTimestamp(history(entries, session)), 5)
 })
