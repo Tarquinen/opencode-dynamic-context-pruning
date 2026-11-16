@@ -76,7 +76,8 @@ export function history(entries: History, session: Session): WithParts[] {
             ]
         }
         if (entry.type === "compaction" && entry.status === "completed") {
-            return [{ info: info(entry.id, "assistant", session, entry), parts: [] } as WithParts]
+            const summary = { ...info(entry.id, "assistant", session, entry), finish: "stop" }
+            return [{ info: summary, parts: [] } as WithParts]
         }
         return []
     })

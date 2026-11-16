@@ -159,10 +159,18 @@ export async function setup(ctx: Plugin.Context) {
         if (state.isSubAgent && !config.experimental.allowSubAgents)
             throw new Error("DCP compression is disabled in subagents")
         if (state.compressPermission === "deny") throw new Error("DCP compression is denied")
-        if (state.compressPermission === "ask")
-            throw new Error(
-                "DCP: compress permission 'ask' is not supported by OpenCode V2's public plugin API yet. Compression was not performed.",
-            )
+    }
+
+    // permission.assert exists from OpenCode 2.0.29; the plugin types used here predate it.
+    const permission = ctx.permission as typeof ctx.permission & {
+        assert?: (input: {
+            sessionID: string
+            agent?: string
+            action: string
+            resources: string[]
+            save?: string[]
+            source?: { type: "tool"; messageID: string; id: string }
+        }) => Promise<void>
     }
 
     await ctx.model.transform((editor) => {
@@ -178,10 +186,10 @@ export async function setup(ctx: Plugin.Context) {
                     event.agent,
                 )
                 if (state.isSubAgent && !config.experimental.allowSubAgents) {
-                    delete event.tools.compress
+                    delete event.tools?.compress
                     return
                 }
-                if (state.compressPermission === "deny") delete event.tools.compress
+                if (state.compressPermission === "deny") delete event.tools?.compress
                 state.modelContextLimit = limits.get(`${event.model.providerID}/${event.model.id}`)
                 state.systemPromptTokens = countTokens(
                     event.system.map((part) => part.text).join("\n"),
@@ -267,7 +275,26 @@ export async function setup(ctx: Plugin.Context) {
                             directory: ctx.location.directory,
                             worktree: ctx.location.directory,
                             abort: new AbortController().signal,
-                            ask: async () => allowed(state),
+                            ask: async () => {
+                                allowed(state)
+                                if (state.compressPermission !== "ask") return
+                                if (!permission.assert)
+                                    throw new Error(
+                                        "DCP: compress permission 'ask' requires OpenCode 2.0.29 or newer. Compression was not performed.",
+                                    )
+                                await permission.assert({
+                                    sessionID: context.sessionID,
+                                    agent: context.agent,
+                                    action: "compress",
+                                    resources: ["*"],
+                                    save: ["*"],
+                                    source: {
+                                        type: "tool",
+                                        messageID: context.messageID,
+                                        id: context.id,
+                                    },
+                                })
+                            },
                             metadata: ({ title }: { title?: string }) => {
                                 void context.progress({ title })
                             },
@@ -343,14 +370,8 @@ export async function setup(ctx: Plugin.Context) {
                 return {
                     manualMode: !!state.manualMode,
                     canCompress:
-                        state.compressPermission === "allow" &&
+                        state.compressPermission !== "deny" &&
                         (!state.isSubAgent || config.experimental.allowSubAgents),
-                    ...(state.compressPermission === "ask"
-                        ? {
-                              blockedReason:
-                                  "Permission 'ask' is not supported by the V2 plugin API yet.",
-                          }
-                        : {}),
                     context: analyzeContextTokens(state, messages),
                     stats: await buildStatsReport(state, logger),
                 }

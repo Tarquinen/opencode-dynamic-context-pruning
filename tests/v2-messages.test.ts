@@ -1,7 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import type { Message } from "@opencode/ai/schema/messages"
-import { project } from "../lib/v2/messages"
+import { history, project } from "../lib/v2/messages"
+import { findLastCompactionTimestamp } from "../lib/state/utils"
 import { createSessionState, type CompressionBlock } from "../lib/state"
 import { assignMessageRefs } from "../lib/message-ids"
 import { injectMessageIds, prune } from "../lib/messages"
@@ -205,4 +206,12 @@ test("V2 compression keeps results paired when tool call IDs are reused", () => 
     })
     prune(state, logger, config, view.messages)
     assert.deepEqual(view.restore(), [native[0], native[3], native[4], native[5]])
+})
+
+test("completed V2 compaction entries count as native compaction", () => {
+    const entries = [
+        { id: "cmp_one", type: "compaction", status: "completed", time: { created: 5 } },
+        { id: "msg_user", type: "user", text: "Continue", time: { created: 6 } },
+    ] as unknown as Parameters<typeof history>[0]
+    assert.equal(findLastCompactionTimestamp(history(entries, session)), 5)
 })
