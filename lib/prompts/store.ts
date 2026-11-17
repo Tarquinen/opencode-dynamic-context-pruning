@@ -420,9 +420,15 @@ export class PromptStore {
     }
 
     private ensureDefaultFiles(): void {
+        if (existsSync(this.paths.defaultsDir)) {
+            return
+        }
+
         try {
             mkdirSync(this.paths.defaultsDir, { recursive: true })
-            mkdirSync(this.paths.globalOverridesDir, { recursive: true })
+            if (!existsSync(this.paths.globalOverridesDir)) {
+                mkdirSync(this.paths.globalOverridesDir, { recursive: true })
+            }
         } catch {
             this.logger.warn("Failed to initialize prompt directories", {
                 defaultsDir: this.paths.defaultsDir,
