@@ -158,7 +158,7 @@
                 },
                 "maxContextLimit": {
                     "description": "Soft upper threshold. Above this, DCP keeps sending strong compression nudges (based on nudgeFrequency), so the model is pushed to compress. Accepts number or \"X%\" of the model context window.",
-                    "default": 100000,
+                    "default": "70%",
                     "oneOf": [
                         {
                             "type": "number"
@@ -171,7 +171,7 @@
                 },
                 "minContextLimit": {
                     "description": "Soft lower threshold for reminder nudges. Below this, turn/iteration reminders are off (compression is less likely). At or above this, reminders are on. Accepts number or \"X%\" of the model context window.",
-                    "default": 50000,
+                    "default": "35%",
                     "oneOf": [
                         {
                             "type": "number"
@@ -254,8 +254,8 @@
                 "permission": "allow",
                 "showCompression": false,
                 "summaryBuffer": true,
-                "maxContextLimit": 100000,
-                "minContextLimit": 50000,
+                "maxContextLimit": "70%",
+                "minContextLimit": "35%",
                 "nudgeFrequency": 5,
                 "iterationNudgeThreshold": 15,
                 "nudgeForce": "soft",
