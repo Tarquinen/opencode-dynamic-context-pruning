@@ -1,9 +1,12 @@
 import { getConfig, type PluginConfig } from "../config"
 import { Logger } from "../logger"
 import { filterMessages } from "../messages/shape"
-import { createSessionState, type SessionState, type WithParts } from "../state"
-import { loadSessionState } from "../state/persistence"
-import { findLastCompactionTimestamp, loadPruneMap, loadPruneMessagesState } from "../state/utils"
+import {
+    createSessionState,
+    ensureSessionInitialized,
+    type SessionState,
+    type WithParts,
+} from "../state"
 import type { TuiApi } from "./types"
 
 export const logger = new Logger(false)
@@ -34,32 +37,20 @@ export function sessionMessages(api: TuiApi, sessionID: string): WithParts[] {
 }
 
 export async function buildSessionState(
+    api: TuiApi,
     sessionID: string,
     messages: WithParts[],
     config: PluginConfig,
 ): Promise<SessionState> {
     const state = createSessionState()
-    state.sessionId = sessionID
-    state.manualMode = config.manualMode.enabled ? "active" : false
-    state.lastCompaction = findLastCompactionTimestamp(messages)
-
-    const persisted = await loadSessionState(sessionID, logger)
-    if (persisted) {
-        if (typeof persisted.manualMode === "boolean") {
-            state.manualMode = persisted.manualMode ? "active" : false
-        }
-
-        state.prune.tools = loadPruneMap(persisted.prune.tools)
-        state.prune.messages = loadPruneMessagesState(persisted.prune.messages)
-        state.nudges.contextLimitAnchors = new Set(persisted.nudges.contextLimitAnchors || [])
-        state.nudges.turnNudgeAnchors = new Set(persisted.nudges.turnNudgeAnchors || [])
-        state.nudges.iterationNudgeAnchors = new Set(persisted.nudges.iterationNudgeAnchors || [])
-        state.stats = {
-            pruneTokenCounter: persisted.stats?.pruneTokenCounter || 0,
-            totalPruneTokens: persisted.stats?.totalPruneTokens || 0,
-        }
-    }
-
+    await ensureSessionInitialized(
+        api.client,
+        state,
+        sessionID,
+        logger,
+        messages,
+        config.manualMode.enabled,
+    )
     return state
 }
 
@@ -68,6 +59,6 @@ export async function loadSessionData(api: TuiApi, config: PluginConfig) {
     if (!sessionID) return undefined
 
     const messages = sessionMessages(api, sessionID)
-    const state = await buildSessionState(sessionID, messages, config)
+    const state = await buildSessionState(api, sessionID, messages, config)
     return { state, messages }
 }

@@ -2,8 +2,22 @@ import { SessionState, ToolParameterEntry, WithParts } from "../state"
 import { countTokens } from "../token-utils"
 import { isIgnoredUserMessage } from "../messages/query"
 
+/** Tools whose display label is just one parameter value. */
+const SINGLE_FIELD_LABEL: Record<string, string> = {
+    write: "filePath",
+    edit: "filePath",
+    multiedit: "filePath",
+    webfetch: "url",
+    skill: "name",
+}
+
 function extractParameterKey(tool: string, parameters: any): string {
     if (!parameters) return ""
+
+    const labelField = SINGLE_FIELD_LABEL[tool]
+    if (labelField && parameters[labelField]) {
+        return parameters[labelField]
+    }
 
     if (tool === "read" && parameters.filePath) {
         const offset = parameters.offset
@@ -17,10 +31,6 @@ function extractParameterKey(tool: string, parameters: any): string {
         if (limit !== undefined) {
             return `${parameters.filePath} (lines 0-${limit})`
         }
-        return parameters.filePath
-    }
-
-    if ((tool === "write" || tool === "edit" || tool === "multiedit") && parameters.filePath) {
         return parameters.filePath
     }
 
@@ -46,20 +56,10 @@ function extractParameterKey(tool: string, parameters: any): string {
         return parameters.path || "(current directory)"
     }
 
-    if (tool === "glob") {
-        if (parameters.pattern) {
-            const pathInfo = parameters.path ? ` in ${parameters.path}` : ""
-            return `"${parameters.pattern}"${pathInfo}`
-        }
-        return "(unknown pattern)"
-    }
-
-    if (tool === "grep") {
-        if (parameters.pattern) {
-            const pathInfo = parameters.path ? ` in ${parameters.path}` : ""
-            return `"${parameters.pattern}"${pathInfo}`
-        }
-        return "(unknown pattern)"
+    if (tool === "glob" || tool === "grep") {
+        return parameters.pattern
+            ? `"${parameters.pattern}"${parameters.path ? ` in ${parameters.path}` : ""}`
+            : "(unknown pattern)"
     }
 
     if (tool === "bash") {
@@ -71,13 +71,7 @@ function extractParameterKey(tool: string, parameters: any): string {
         }
     }
 
-    if (tool === "webfetch" && parameters.url) {
-        return parameters.url
-    }
-    if (tool === "websearch" && parameters.query) {
-        return `"${parameters.query}"`
-    }
-    if (tool === "codesearch" && parameters.query) {
+    if ((tool === "websearch" || tool === "codesearch") && parameters.query) {
         return `"${parameters.query}"`
     }
 
@@ -90,9 +84,6 @@ function extractParameterKey(tool: string, parameters: any): string {
 
     if (tool === "task" && parameters.description) {
         return parameters.description
-    }
-    if (tool === "skill" && parameters.name) {
-        return parameters.name
     }
 
     if (tool === "lsp") {

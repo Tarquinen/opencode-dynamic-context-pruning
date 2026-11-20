@@ -208,6 +208,20 @@ function buildMessagePriorityGuidance(
     return renderMessagePriorityGuidance(priorityLabel, refs)
 }
 
+/**
+ * Attach text no existing part will take: a synthetic part placed before the first
+ * tool part (so the model reads it as context), or appended when there is no tool.
+ */
+export function prependSyntheticPart(message: WithParts, text: string): void {
+    const syntheticPart = createSyntheticTextPart(message, text)
+    const firstToolIndex = message.parts.findIndex((p) => p.type === "tool")
+    if (firstToolIndex === -1) {
+        message.parts.push(syntheticPart)
+    } else {
+        message.parts.splice(firstToolIndex, 0, syntheticPart)
+    }
+}
+
 function injectAnchoredNudge(message: WithParts, nudgeText: string): void {
     if (!nudgeText.trim()) {
         return
@@ -238,13 +252,7 @@ function injectAnchoredNudge(message: WithParts, nudgeText: string): void {
         }
     }
 
-    const syntheticPart = createSyntheticTextPart(message, nudgeText)
-    const firstToolIndex = message.parts.findIndex((p) => p.type === "tool")
-    if (firstToolIndex === -1) {
-        message.parts.push(syntheticPart)
-    } else {
-        message.parts.splice(firstToolIndex, 0, syntheticPart)
-    }
+    prependSyntheticPart(message, nudgeText)
 }
 
 function collectAnchoredMessages(
@@ -329,46 +337,19 @@ export function applyAnchoredNudges(
     compressionPriorities?: CompressionPriorityMap,
 ): void {
     const turnNudgeAnchors = collectTurnNudgeAnchors(state, config, messages)
+    const nudgeTargets: Array<[Set<string>, string]> = [
+        [state.nudges.contextLimitAnchors, prompts.contextLimitNudge],
+        [turnNudgeAnchors, prompts.turnNudge],
+        [state.nudges.iterationNudgeAnchors, prompts.iterationNudge],
+    ]
 
     if (config.compress.mode === "message") {
-        applyMessageModeAnchoredNudge(
-            state.nudges.contextLimitAnchors,
-            messages,
-            prompts.contextLimitNudge,
-            compressionPriorities,
-        )
-        applyMessageModeAnchoredNudge(
-            turnNudgeAnchors,
-            messages,
-            prompts.turnNudge,
-            compressionPriorities,
-        )
-        applyMessageModeAnchoredNudge(
-            state.nudges.iterationNudgeAnchors,
-            messages,
-            prompts.iterationNudge,
-            compressionPriorities,
-        )
+        for (const [anchors, nudgeText] of nudgeTargets)
+            applyMessageModeAnchoredNudge(anchors, messages, nudgeText, compressionPriorities)
         return
     }
 
     const compressedBlockGuidance = buildCompressedBlockGuidance(state)
-    applyRangeModeAnchoredNudge(
-        state.nudges.contextLimitAnchors,
-        messages,
-        prompts.contextLimitNudge,
-        compressedBlockGuidance,
-    )
-    applyRangeModeAnchoredNudge(
-        turnNudgeAnchors,
-        messages,
-        prompts.turnNudge,
-        compressedBlockGuidance,
-    )
-    applyRangeModeAnchoredNudge(
-        state.nudges.iterationNudgeAnchors,
-        messages,
-        prompts.iterationNudge,
-        compressedBlockGuidance,
-    )
+    for (const [anchors, nudgeText] of nudgeTargets)
+        applyRangeModeAnchoredNudge(anchors, messages, nudgeText, compressedBlockGuidance)
 }

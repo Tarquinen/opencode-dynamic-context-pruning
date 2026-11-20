@@ -8,19 +8,15 @@ import * as fs from "fs/promises"
 import { existsSync } from "fs"
 import { homedir } from "os"
 import { join } from "path"
-import type { CompressionBlock, PrunedMessageEntry, SessionState, SessionStats } from "./types"
+import type {
+    CompressionBlock,
+    PersistedPruneMessagesState,
+    PrunedMessageEntry,
+    SessionState,
+    SessionStats,
+} from "./types"
 import type { Logger } from "../logger"
 import { serializePruneMessagesState } from "./utils"
-
-/** Prune state as stored on disk */
-export interface PersistedPruneMessagesState {
-    byMessageId: Record<string, PrunedMessageEntry>
-    blocksById: Record<string, CompressionBlock>
-    activeBlockIds: number[]
-    activeByAnchorMessageId: Record<string, number>
-    nextBlockId: number
-    nextRunId: number
-}
 
 export interface PersistedPrune {
     tools?: Record<string, number>
@@ -143,53 +139,24 @@ export async function loadSessionState(
             return null
         }
 
-        const rawContextLimitAnchors = Array.isArray(state.nudges.contextLimitAnchors)
-            ? state.nudges.contextLimitAnchors
-            : []
-        const validAnchors = rawContextLimitAnchors.filter(
-            (entry): entry is string => typeof entry === "string",
-        )
-        const dedupedAnchors = [...new Set(validAnchors)]
-        if (validAnchors.length !== rawContextLimitAnchors.length) {
-            logger.warn("Filtered out malformed contextLimitAnchors entries", {
-                sessionId: sessionId,
-                original: rawContextLimitAnchors.length,
-                valid: validAnchors.length,
-            })
+        // All three anchor lists share one shape: keep strings, drop duplicates.
+        for (const key of [
+            "contextLimitAnchors",
+            "turnNudgeAnchors",
+            "iterationNudgeAnchors",
+        ] as const) {
+            const raw = state.nudges[key]
+            const list = Array.isArray(raw) ? raw : []
+            const valid = list.filter((entry): entry is string => typeof entry === "string")
+            if (valid.length !== list.length) {
+                logger.warn(`Filtered out malformed ${key} entries`, {
+                    sessionId: sessionId,
+                    original: list.length,
+                    valid: valid.length,
+                })
+            }
+            state.nudges[key] = [...new Set(valid)]
         }
-        state.nudges.contextLimitAnchors = dedupedAnchors
-
-        const rawTurnNudgeAnchors = Array.isArray(state.nudges.turnNudgeAnchors)
-            ? state.nudges.turnNudgeAnchors
-            : []
-        const validSoftAnchors = rawTurnNudgeAnchors.filter(
-            (entry): entry is string => typeof entry === "string",
-        )
-        const dedupedSoftAnchors = [...new Set(validSoftAnchors)]
-        if (validSoftAnchors.length !== rawTurnNudgeAnchors.length) {
-            logger.warn("Filtered out malformed turnNudgeAnchors entries", {
-                sessionId: sessionId,
-                original: rawTurnNudgeAnchors.length,
-                valid: validSoftAnchors.length,
-            })
-        }
-        state.nudges.turnNudgeAnchors = dedupedSoftAnchors
-
-        const rawIterationNudgeAnchors = Array.isArray(state.nudges.iterationNudgeAnchors)
-            ? state.nudges.iterationNudgeAnchors
-            : []
-        const validIterationAnchors = rawIterationNudgeAnchors.filter(
-            (entry): entry is string => typeof entry === "string",
-        )
-        const dedupedIterationAnchors = [...new Set(validIterationAnchors)]
-        if (validIterationAnchors.length !== rawIterationNudgeAnchors.length) {
-            logger.warn("Filtered out malformed iterationNudgeAnchors entries", {
-                sessionId: sessionId,
-                original: rawIterationNudgeAnchors.length,
-                valid: validIterationAnchors.length,
-            })
-        }
-        state.nudges.iterationNudgeAnchors = dedupedIterationAnchors
 
         logger.info("Loaded session state from disk", {
             sessionId: sessionId,

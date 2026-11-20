@@ -28,6 +28,7 @@ import {
     getNudgeFrequency,
     getModelInfo,
     isContextOverLimits,
+    prependSyntheticPart,
 } from "./utils"
 
 export const injectCompressNudges = (
@@ -211,12 +212,6 @@ export const injectMessageIds = (
             continue
         }
 
-        const syntheticPart = createSyntheticTextPart(message, tag)
-        const firstToolIndex = message.parts.findIndex((p) => p.type === "tool")
-        if (firstToolIndex === -1) {
-            message.parts.push(syntheticPart)
-        } else {
-            message.parts.splice(firstToolIndex, 0, syntheticPart)
-        }
+        prependSyntheticPart(message, tag)
     }
 }
