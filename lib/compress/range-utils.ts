@@ -1,8 +1,10 @@
 import type { CompressionBlock, SessionState } from "../state"
+import { NON_EMPTY_ARRAY_ERROR_MESSAGE, isStringFields, normalizeCompressArgs } from "./args"
 import { resolveAnchorMessageId, resolveBoundaryIds, resolveSelection } from "./search"
 import type { IdFormat } from "../message-ids"
 import type {
     BoundaryReference,
+    CompressRangeEntry,
     CompressRangeToolArgs,
     InjectedSummaryResult,
     ParsedBlockPlaceholder,
@@ -12,13 +14,34 @@ import type {
 
 const BLOCK_PLACEHOLDER_REGEX = /\(b(\d+)\)|\{block_(\d+)\}/gi
 
+const RANGE_ENTRY_KEYS = ["startId", "endId", "summary"] as const
+
+export function isRangeEntry(value: unknown): value is CompressRangeEntry {
+    return isStringFields(value, RANGE_ENTRY_KEYS)
+}
+
+const RANGE_CONTENT_GUIDANCE =
+    're-send with content as an array of range objects: [{ "startId": "m0001", "endId": "m0031", "summary": "..." }]. ' +
+    "startId and endId must be the message (mNNNN) or compressed-block (bN) IDs, visible as <dcp-message-id> tags in context, " +
+    "that bound the range your summary covers. A summary string alone does not say which messages to replace."
+
+export function normalizeRangeArgs(args: unknown): CompressRangeToolArgs {
+    return normalizeCompressArgs(args, {
+        isEntry: isRangeEntry,
+        contentNoun: "ranges",
+        shapeExample:
+            '{ "topic": "...", "content": [{ "startId": "m0001", "endId": "m0031", "summary": "..." }] }',
+        contentGuidance: RANGE_CONTENT_GUIDANCE,
+    })
+}
+
 export function validateArgs(args: CompressRangeToolArgs): void {
     if (typeof args.topic !== "string" || args.topic.trim().length === 0) {
         throw new Error("topic is required and must be a non-empty string")
     }
 
     if (!Array.isArray(args.content) || args.content.length === 0) {
-        throw new Error("content is required and must be a non-empty array")
+        throw new Error(NON_EMPTY_ARRAY_ERROR_MESSAGE)
     }
 
     for (let index = 0; index < args.content.length; index++) {

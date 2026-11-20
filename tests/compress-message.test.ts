@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { mkdirSync } from "node:fs"
 import { createCompressMessageTool } from "../lib/compress/message"
+import { normalizeMessageArgs, validateArgs } from "../lib/compress/message-utils"
 import { createSessionState, type WithParts } from "../lib/state"
 import type { PluginConfig } from "../lib/config"
 import { Logger } from "../lib/logger"
@@ -887,4 +888,38 @@ test("compress message mode reports issues when every batch entry is skipped", a
     )
 
     assert.equal(state.prune.messages.blocksById.size, 0)
+})
+
+test("compress message normalizes single-object content into an array", () => {
+    const input = normalizeMessageArgs({
+        topic: "Message fix",
+        content: { messageId: "m0001", topic: "Label", summary: "Summary text." },
+    })
+    assert.deepEqual(input.content, [
+        { messageId: "m0001", topic: "Label", summary: "Summary text." },
+    ])
+    assert.doesNotThrow(() => validateArgs(input))
+})
+
+test("compress message rejects plain-string content with re-send guidance", () => {
+    assert.throws(
+        () =>
+            normalizeMessageArgs({
+                topic: "Message fix",
+                content: "A plain summary without a message id.",
+            }),
+        (err: Error) => err.message.includes("JSON array") && err.message.includes("messageId"),
+    )
+})
+
+test("compress message still rejects empty content arrays", () => {
+    const input = normalizeMessageArgs({ topic: "Message fix", content: [] })
+    assert.throws(() => validateArgs(input), /content is required and must be a non-empty array/)
+})
+
+test("compress message rejects a JSON-encoded empty content array with the non-empty error", () => {
+    assert.throws(
+        () => normalizeMessageArgs({ topic: "Message fix", content: "[]" }),
+        /content is required and must be a non-empty array/,
+    )
 })

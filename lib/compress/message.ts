@@ -3,7 +3,13 @@ import type { ToolContext } from "./types"
 import { countTokens } from "../token-utils"
 import { messageFormat } from "../prompts/extensions/tool"
 import { formatMessageRef, type IdFormat } from "../message-ids"
-import { formatIssues, formatResult, resolveMessages, validateArgs } from "./message-utils"
+import {
+    formatIssues,
+    formatResult,
+    normalizeMessageArgs,
+    resolveMessages,
+    validateArgs,
+} from "./message-utils"
 import { finalizeSession, prepareSession, type NotificationEntry } from "./pipeline"
 import { appendProtectedPromptInfo, appendProtectedTools } from "./protected-content"
 import {
@@ -12,7 +18,6 @@ import {
     applyCompressionState,
     wrapCompressedSummary,
 } from "./state"
-import type { CompressMessageToolArgs } from "./types"
 
 function buildSchema(format: IdFormat) {
     return {
@@ -49,7 +54,7 @@ export function createCompressMessageTool(ctx: ToolContext): ReturnType<typeof t
         description: runtimePrompts.compressMessage + messageFormat(ctx.state.idFormat),
         args: buildSchema(ctx.state.idFormat),
         async execute(args, toolCtx) {
-            const input = args as CompressMessageToolArgs
+            const input = normalizeMessageArgs(args)
             validateArgs(input)
             const callId =
                 typeof (toolCtx as unknown as { callID?: unknown }).callID === "string"

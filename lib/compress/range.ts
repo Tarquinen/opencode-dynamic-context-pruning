@@ -12,6 +12,7 @@ import {
 import {
     appendMissingBlockSummaries,
     injectBlockPlaceholders,
+    normalizeRangeArgs,
     parseBlockPlaceholders,
     resolveRanges,
     validateArgs,
@@ -64,7 +65,7 @@ export function createCompressRangeTool(ctx: ToolContext): ReturnType<typeof too
         description: runtimePrompts.compressRange + rangeFormat(ctx.state.idFormat),
         args: buildSchema(ctx.state.idFormat),
         async execute(args, toolCtx) {
-            const input = args as CompressRangeToolArgs
+            const input = normalizeRangeArgs(args)
             validateArgs(input)
             const callId =
                 typeof (toolCtx as unknown as { callID?: unknown }).callID === "string"

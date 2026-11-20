@@ -2,6 +2,7 @@ import type { PluginConfig } from "../config"
 import type { SessionState } from "../state"
 import { parseBoundaryId, type IdFormat } from "../message-ids"
 import { isIgnoredUserMessage, isProtectedUserMessage } from "../messages/query"
+import { NON_EMPTY_ARRAY_ERROR_MESSAGE, isStringFields, normalizeCompressArgs } from "./args"
 import { resolveAnchorMessageId, resolveBoundaryIds, resolveSelection } from "./search"
 import { COMPRESSED_BLOCK_HEADER } from "./state"
 import type {
@@ -11,6 +12,27 @@ import type {
     ResolvedMessageCompressionsResult,
     SearchContext,
 } from "./types"
+
+const MESSAGE_ENTRY_KEYS = ["messageId", "topic", "summary"] as const
+
+export function isMessageEntry(value: unknown): value is CompressMessageEntry {
+    return isStringFields(value, MESSAGE_ENTRY_KEYS)
+}
+
+const MESSAGE_CONTENT_GUIDANCE =
+    're-send with content as an array of message objects: [{ "messageId": "m0001", "topic": "...", "summary": "..." }]. ' +
+    "messageId must be the message ID (mNNNN), visible as a <dcp-message-id> tag in context, that your summary covers. " +
+    "A summary string alone does not say which message to replace."
+
+export function normalizeMessageArgs(args: unknown): CompressMessageToolArgs {
+    return normalizeCompressArgs(args, {
+        isEntry: isMessageEntry,
+        contentNoun: "messages",
+        shapeExample:
+            '{ "topic": "...", "content": [{ "messageId": "m0001", "topic": "...", "summary": "..." }] }',
+        contentGuidance: MESSAGE_CONTENT_GUIDANCE,
+    })
+}
 
 interface SkippedIssue {
     kind: string
@@ -33,7 +55,7 @@ export function validateArgs(args: CompressMessageToolArgs): void {
     }
 
     if (!Array.isArray(args.content) || args.content.length === 0) {
-        throw new Error("content is required and must be a non-empty array")
+        throw new Error(NON_EMPTY_ARRAY_ERROR_MESSAGE)
     }
 
     for (let index = 0; index < args.content.length; index++) {

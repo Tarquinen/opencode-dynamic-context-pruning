@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { mkdirSync } from "node:fs"
 import { createCompressRangeTool } from "../lib/compress/range"
+import { normalizeRangeArgs, validateArgs } from "../lib/compress/range-utils"
 import { createSessionState, type WithParts } from "../lib/state"
 import type { PluginConfig } from "../lib/config"
 import { Logger } from "../lib/logger"
@@ -382,4 +383,103 @@ test("compress range mode rejects overlapping batched ranges", async () => {
     )
 
     assert.equal(state.prune.messages.blocksById.size, 0)
+})
+test("compress range normalizes single-object content into an array", () => {
+    const input = normalizeRangeArgs({
+        topic: "Range fix",
+        content: { startId: "m0001", endId: "m0002", summary: "Summary text." },
+    })
+    assert.deepEqual(input.content, [
+        { startId: "m0001", endId: "m0002", summary: "Summary text." },
+    ])
+    assert.doesNotThrow(() => validateArgs(input))
+})
+
+test("compress range normalizes JSON-string content into an array", () => {
+    const arrayInput = normalizeRangeArgs({
+        topic: "Range fix",
+        content: JSON.stringify([{ startId: "m0001", endId: "m0002", summary: "Summary text." }]),
+    })
+    assert.equal(arrayInput.content.length, 1)
+    assert.equal(arrayInput.content[0].startId, "m0001")
+    assert.doesNotThrow(() => validateArgs(arrayInput))
+
+    const objectInput = normalizeRangeArgs({
+        topic: "Range fix",
+        content: JSON.stringify({ startId: "m0003", endId: "m0004", summary: "Another." }),
+    })
+    assert.equal(objectInput.content.length, 1)
+    assert.equal(objectInput.content[0].endId, "m0004")
+    assert.doesNotThrow(() => validateArgs(objectInput))
+})
+
+test("compress range rejects plain-string content with re-send guidance", () => {
+    assert.throws(
+        () =>
+            normalizeRangeArgs({
+                topic: "Range fix",
+                content: "A plain summary without range boundaries.",
+            }),
+        (err: Error) =>
+            err.message.includes("JSON array") &&
+            err.message.includes("startId") &&
+            err.message.includes("endId"),
+    )
+})
+
+test("compress range still rejects empty content arrays", () => {
+    const input = normalizeRangeArgs({ topic: "Range fix", content: [] })
+    assert.throws(() => validateArgs(input), /content is required and must be a non-empty array/)
+})
+
+test("compress range rejects a JSON-encoded empty content array with the non-empty error", () => {
+    assert.throws(
+        () => normalizeRangeArgs({ topic: "Range fix", content: "[]" }),
+        /content is required and must be a non-empty array/,
+    )
+})
+
+test("compress range rejects a whole-args string with re-send guidance", () => {
+    assert.throws(
+        () => normalizeRangeArgs("Just a summary string."),
+        (err: Error) => err.message.includes('"topic"') && err.message.includes('"content"'),
+    )
+})
+
+test("compress range execute rejects the captured string-content payload with guidance", async () => {
+    // Replay of a real-world failure captured from opencode sessions: the model
+    // sent the summary as a plain `content` string and the tool errored with
+    // "content is required and must be a non-empty array", forcing a retry.
+    const tool = createCompressRangeTool({
+        client: {},
+        state: createSessionState(),
+        logger: new Logger(false),
+        config: buildConfig(),
+        prompts: {
+            reload() {},
+            getRuntimePrompts() {
+                return { compressRange: "", compressMessage: "" }
+            },
+        },
+    } as any)
+
+    await assert.rejects(
+        tool.execute(
+            {
+                topic: "XKBNotFound bug diagnosis (Phases 1-4)",
+                content:
+                    "User bug report (verbatim intent): `just run` fails — xkbcommon-dl fails to dlopen libxkbcommon.so.0.",
+            },
+            {
+                ask: async () => {},
+                metadata: () => {},
+                sessionID: "ses_string_content_replay",
+                messageID: "msg-compress-string-content",
+            },
+        ),
+        (err: Error) =>
+            err.message.includes("JSON array") &&
+            err.message.includes("startId") &&
+            err.message.includes("endId"),
+    )
 })
