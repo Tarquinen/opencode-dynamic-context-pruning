@@ -279,6 +279,62 @@ test("isContextOverLimits extends the max threshold by active summary tokens", (
     assert.equal(overExtendedLimit.overMaxLimit, true)
 })
 
+test("isContextOverLimits accounts for context growth after latest assistant report", () => {
+    const sessionID = "ses_context_growth_after_report"
+    const reportedTotal = 1000 + 100 + 50 + 25
+    const messages: WithParts[] = [
+        {
+            info: {
+                id: "msg-assistant-reported",
+                role: "assistant",
+                sessionID,
+                agent: "assistant",
+                time: { created: 1 },
+                tokens: {
+                    input: 1000,
+                    output: 100,
+                    reasoning: 50,
+                    cache: {
+                        read: 25,
+                        write: 0,
+                    },
+                },
+            } as WithParts["info"],
+            parts: [textPart("msg-assistant-reported", sessionID, "assistant-part", "Done.")],
+        },
+        {
+            info: {
+                id: "msg-user-large-followup",
+                role: "user",
+                sessionID,
+                agent: "assistant",
+                time: { created: 2 },
+            } as WithParts["info"],
+            parts: [
+                textPart(
+                    "msg-user-large-followup",
+                    sessionID,
+                    "user-large-part",
+                    repeatedWord("payload", 5000),
+                ),
+            ],
+        },
+    ]
+    const state = createSessionState()
+
+    assert.ok(getCurrentTokenUsage(state, messages) > reportedTotal)
+
+    const overLimit = isContextOverLimits(
+        buildConfig(reportedTotal + 1, 1),
+        state,
+        undefined,
+        undefined,
+        messages,
+    )
+
+    assert.equal(overLimit.overMaxLimit, true)
+})
+
 test("isContextOverLimits does not extend the max threshold when summaryBuffer is disabled", () => {
     const messages = buildCompactedMessages()
     messages.push(buildPostCompactionAssistantMessage())
