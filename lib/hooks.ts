@@ -37,6 +37,7 @@ import {
 import { type HostPermissionSnapshot } from "./host-permissions"
 import { compressPermission, syncCompressPermissionState } from "./compress-permission"
 import { checkSession, ensureSessionInitialized, saveSessionState, syncToolCache } from "./state"
+import { reconstructFromHistory } from "./compress/reconstruct"
 import { cacheSystemPromptTokens } from "./ui/utils"
 
 const INTERNAL_AGENT_SIGNATURES = [
@@ -133,6 +134,18 @@ export function createChatMessageTransformHandler(
         stripHallucinations(output.messages)
         cacheSystemPromptTokens(state, output.messages)
         assignMessageRefs(state, output.messages)
+
+        if (state.needsReconstruction) {
+            const reconstructed = reconstructFromHistory(state, logger, output.messages)
+            state.needsReconstruction = false
+            if (reconstructed > 0) {
+                logger.info("Compression state reconstructed from conversation history", {
+                    blocks: reconstructed,
+                })
+                await saveSessionState(state, logger)
+            }
+        }
+
         syncCompressionBlocks(state, logger, output.messages)
         syncToolCache(state, config, logger, output.messages)
         buildToolIdList(state, output.messages)
