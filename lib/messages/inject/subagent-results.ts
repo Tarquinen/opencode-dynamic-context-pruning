@@ -3,6 +3,7 @@ import type { SessionState, WithParts } from "../../state"
 import { filterMessages } from "../shape"
 import {
     buildSubagentResultText,
+    extractTaskResultBody,
     getSubAgentId,
     mergeSubagentResult,
 } from "../../subagents/subagent-results"
@@ -49,6 +50,12 @@ export const injectExtendedSubAgentResults = async (
                         state.idFormat,
                     )
                 }
+                continue
+            }
+
+            const extractedResult = extractTaskResultBody(part.state.output)
+            if (extractedResult) {
+                state.subAgentResultCache.set(part.callID, extractedResult)
                 continue
             }
 
