@@ -347,4 +347,11 @@ export function resetOnCompaction(state: SessionState): void {
         turnNudgeAnchors: new Set<string>(),
         iterationNudgeAnchors: new Set<string>(),
     }
+    state.stats = {
+        pruneTokenCounter: 0,
+        totalPruneTokens: 0,
+    }
+    state.systemPromptTokens = undefined
+    state.compressionTiming.startsByCallId.clear()
+    state.compressionTiming.pendingByCallId.clear()
 }
