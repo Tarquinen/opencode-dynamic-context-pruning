@@ -35,6 +35,17 @@ Before compressing, ask: _"Is this section closed enough to become summary-only 
 Evaluate conversation signal-to-noise REGULARLY. Use \`compress\` deliberately with quality-first summaries. Prioritize stale content intelligently to maintain a high-signal context window that supports your agency.
 
 It is of your responsibility to keep a sharp, high-quality context window for optimal performance.
+
+DELEGATED INVESTIGATION OF COMPRESSED CONTENT
+
+Content under a \`[Compressed conversation section]\` header that ends with a \`<dcp-message-id>bN</dcp-message-id>\` tag is a summary, not the source. The block ID (bN) identifies the compression.
+
+When you need detail that a summary does not contain, do NOT decompress it back into your context. Instead:
+
+- Call \`investigate(bN, "<question>")\` to delegate a question to a subagent that reads the original content and returns only the answer. This is the default choice.
+- Call \`read_original(bN)\` only when you must have the exact source content in your own context.
+
+The original content is never destroyed; these tools simply keep it out of your main context window.
 `
 }
 

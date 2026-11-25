@@ -28,8 +28,10 @@ import {
     handleContextCommand,
     handleDecompressCommand,
     handleHelpCommand,
+    handleInvestigateCommand,
     handleManualToggleCommand,
     handleManualTriggerCommand,
+    handleReadOriginalCommand,
     handleRecompressCommand,
     handleStatsCommand,
     handleSweepCommand,
@@ -277,6 +279,22 @@ export function createCommandExecuteHandler(
 
             if (subcommand === "recompress") {
                 await handleRecompressCommand({
+                    ...commandCtx,
+                    args: subArgs,
+                })
+                return
+            }
+
+            if (subcommand === "read") {
+                await handleReadOriginalCommand({
+                    ...commandCtx,
+                    args: subArgs,
+                })
+                return
+            }
+
+            if (subcommand === "investigate") {
+                await handleInvestigateCommand({
                     ...commandCtx,
                     args: subArgs,
                 })
