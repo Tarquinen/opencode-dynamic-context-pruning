@@ -3,6 +3,7 @@ import type { Plugin } from "@opencode/plugin/tui"
 import { ContextDialog, PanelDialog, StatsDialog, StatusDialog } from "../tui/dialogs"
 import type { ViewApi } from "../tui/types"
 import { rpc } from "./rpc"
+import { dispatchDcpServerCommand } from "./slash-command"
 import { panelTheme } from "./theme"
 
 export async function setup(ctx: Plugin.Context) {
@@ -94,17 +95,32 @@ export async function setup(ctx: Plugin.Context) {
                         slash: { name: "dcp", arguments: true },
                         run: async (input) => {
                             if (!input?.trim()) return open()
-                            const route = ctx.ui.router.current()
-                            if (route.type !== "session") return open()
-                            try {
-                                await ctx.client.session.command({
-                                    sessionID: route.sessionID,
-                                    name: "dcp",
-                                    text: input,
-                                })
-                            } catch (cause) {
-                                error(cause)
-                            }
+                            await dispatchDcpServerCommand({
+                                route: ctx.ui.router.current(),
+                                name: "dcp",
+                                text: input,
+                                command: (request) => ctx.client.session.command(request),
+                                open,
+                                fail: error,
+                            })
+                        },
+                    },
+                    {
+                        id: "dcp.compress",
+                        title: "DCP compress",
+                        description: "Trigger DCP manual compression",
+                        group: "DCP",
+                        palette: true,
+                        slash: { name: "dcp-compress", arguments: true },
+                        run: async (input) => {
+                            await dispatchDcpServerCommand({
+                                route: ctx.ui.router.current(),
+                                name: "dcp-compress",
+                                text: input,
+                                command: (request) => ctx.client.session.command(request),
+                                open,
+                                fail: error,
+                            })
                         },
                     },
                 ],

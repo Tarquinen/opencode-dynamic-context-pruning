@@ -190,7 +190,7 @@ Each level overrides the previous, so project settings take priority over global
 DCP provides a TUI panel and one prompt-producing slash command:
 
 - `/dcp` — Opens the DCP panel with context, stats, and manual-mode controls.
-- `/dcp-compress [focus]` — Asks the model to run one compression pass. Optional focus text directs what content to compress, following the active `compress.mode`.
+- `/dcp-compress [focus]` — Asks the model to run one compression pass. Optional focus text directs what content to compress, following the active `compress.mode`. On OpenCode v2 this is registered in the slash palette and dispatches the server `dcp-compress` command.
 
 ### Prompt Overrides
 
